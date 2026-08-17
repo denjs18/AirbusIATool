@@ -1,0 +1,206 @@
+/**
+ * Test d'integration sur les PDF fictifs reellement generes.
+ *
+ * C'est ce test qui garantit que la demonstration fonctionne : il rejoue la
+ * chaine complete (extraction PDF -> exigences -> trames -> controles) et
+ * verifie que chaque defaut volontairement introduit dans les fixtures est bien
+ * detecte. Si une regression casse la demo, ce test tombe avant la reunion.
+ */
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { checkCitations, extractChapters, extractCitations } from "../lib/coherence";
+import { buildCoversheetsFromPlan, renderCoversheetMarkdown } from "../lib/coversheet";
+import { crossCheck } from "../lib/crosscheck";
+import { checkHeader, parseHeader } from "../lib/headers";
+import { parsePlan, planStats } from "../lib/parse-acp";
+import { isRegistryFile, registryToCoversheets } from "../lib/registry";
+import { extractPdfTextNode } from "./pdf-node";
+
+const FIXTURES = "public/fixtures";
+const TODAY = new Date(Date.UTC(2026, 7, 17));
+
+const acpText = await extractPdfTextNode(`${FIXTURES}/ACP-27-CER-0114_Iss3.pdf`);
+const safetyText = await extractPdfTextNode(`${FIXTURES}/DOC-27-SAF-0142_Iss2.pdf`);
+const coversheetText = await extractPdfTextNode(`${FIXTURES}/CVS-27-FCS-0001_Iss2.pdf`);
+
+describe("extraction du plan de certification", () => {
+  const plan = parsePlan(acpText);
+
+  it("lit l'en-tete de la page de garde", () => {
+    expect(plan.header.documentRef).toBe("ACP-27-CER-0114");
+    expect(plan.header.issue).toBe("3");
+    expect(plan.header.ataChapter).toBe("27");
+    expect(plan.header.programme).toBe("A32N-DEMO");
+  });
+
+  it("valide l'en-tete du plan", () => {
+    const results = checkHeader(plan.header, {
+      expectedAta: "27",
+      allowedProgrammes: ["A32N-DEMO"],
+      today: TODAY,
+    });
+    expect(results.map((r) => r.status)).toEqual(["ok"]);
+  });
+
+  it("retrouve les exigences citees dans tout le document", () => {
+    const ids = plan.requirements.map((requirement) => requirement.id);
+
+    for (const expected of [
+      "CS 25.671",
+      "CS 25.671(c)(1)",
+      "CS 25.672",
+      "CS 25.1309(b)",
+      "CS 25.143",
+      "CS 25.703",
+      "AMC 25.1309",
+      "SC F-12",
+      "CRI F-01",
+      "CRI B-14",
+      "ESF F-03",
+    ]) {
+      expect(ids, `${expected} doit etre extrait`).toContain(expected);
+    }
+  });
+
+  it("rattache les exigences a leur page et a leur section", () => {
+    const occurrence = plan.occurrences.find((o) => o.id === "CS 25.672");
+    expect(occurrence?.page).toBe(2);
+    expect(occurrence?.section).toContain("Primary requirements");
+  });
+
+  it("remonte les MoC annonces dans le plan", () => {
+    const occurrence = plan.occurrences.find(
+      (o) => o.id === "CS 25.671" && o.mocCodes.length > 0,
+    );
+    expect(occurrence?.mocCodes).toEqual(["MC1", "MC2", "MC3", "MC6"]);
+  });
+
+  it("produit des statistiques exploitables", () => {
+    const stats = planStats(plan);
+    expect(stats.pageCount).toBe(5);
+    expect(stats.requirementCount).toBeGreaterThanOrEqual(20);
+    expect(stats.byKind.CS).toBeGreaterThanOrEqual(15);
+    expect(stats.byKind.SC).toBe(1);
+  });
+});
+
+describe("generation des trames de coversheet", () => {
+  const plan = parsePlan(acpText);
+  const coversheets = buildCoversheetsFromPlan(plan, {
+    issueDate: "2026-08-17",
+    author: "D. Testeur",
+  });
+
+  it("genere une trame par exigence du plan", () => {
+    expect(coversheets).toHaveLength(plan.requirements.length);
+  });
+
+  it("reprend les MoC du plan dans la trame", () => {
+    const sheet = coversheets.find((c) => c.requirement.id === "CS 25.671");
+    expect(sheet?.mocCodes).toEqual(["MC1", "MC2", "MC3", "MC6"]);
+  });
+
+  it("rend une trame complete et tracable", () => {
+    const sheet = coversheets.find((c) => c.requirement.id === "CS 25.1309(b)")!;
+    const markdown = renderCoversheetMarkdown(sheet, plan.sourceName);
+    expect(markdown).toContain("Compliance coversheet - CS 25.1309(b)");
+    expect(markdown).toContain("ACP-27-CER-0114_Iss3.pdf");
+    expect(markdown).toContain("[A REDIGER]");
+  });
+});
+
+describe("coherence des renvois de la coversheet fictive", () => {
+  const chapters = extractChapters(safetyText.pages);
+  const citationText = coversheetText.pages.map((page) => page.text).join("\n");
+  const results = checkCitations(extractCitations(citationText), chapters, {
+    actualDocumentRef: "DOC-27-SAF-0142",
+    actualDocumentIssue: "2",
+  });
+
+  it("reconstitue la structure du document de substantiation", () => {
+    const numbers = chapters.map((chapter) => chapter.number);
+    expect(numbers).toContain("3.3");
+    expect(numbers).toContain("4.3.2");
+    expect(numbers).not.toContain("7.2");
+  });
+
+  it("detecte le renvoi vers un chapitre inexistant (defaut volontaire)", () => {
+    const missing = results.find((r) => r.label.includes("7.2") && r.status === "error");
+    expect(missing).toBeDefined();
+  });
+
+  it("detecte le titre annonce qui ne correspond pas au chapitre 4.3.2", () => {
+    const mismatch = results.find((r) => r.label.includes("4.3.2"));
+    expect(mismatch?.status).toBe("error");
+    expect(mismatch?.detail).toContain("Particular risks analysis");
+  });
+
+  it("valide le renvoi correct vers le chapitre 4.1", () => {
+    const ok = results.find((r) => r.label.includes("4.1") && r.status === "ok");
+    expect(ok).toBeDefined();
+  });
+
+  it("signale l'issue citee obsolete", () => {
+    expect(results.some((r) => r.id.endsWith(".issue") && r.status === "warning")).toBe(true);
+  });
+
+  it("n'evalue pas le renvoi vers un document non fourni", () => {
+    const other = results.find((r) => r.label.includes("DOC-27-STR-0087"));
+    expect(other?.status).toBe("info");
+  });
+});
+
+describe("controle de l'en-tete de la coversheet fictive", () => {
+  const header = parseHeader(coversheetText.pages[0].text);
+  const results = checkHeader(header, {
+    expectedAta: "27",
+    allowedProgrammes: ["A32N-DEMO"],
+    today: TODAY,
+  });
+
+  it("detecte le champ Programme absent (defaut volontaire)", () => {
+    expect(results.find((r) => r.id === "header.missing.programme")?.status).toBe("error");
+  });
+
+  it("detecte le redacteur egal a l'approbateur (defaut volontaire)", () => {
+    expect(results.find((r) => r.id === "header.roles.conflict")?.status).toBe("error");
+  });
+
+  it("detecte la date d'emission future (defaut volontaire)", () => {
+    expect(results.find((r) => r.id === "header.date.future")?.status).toBe("warning");
+  });
+});
+
+describe("recoupement ACP / registre de coversheets", () => {
+  const plan = parsePlan(acpText);
+  const registry = JSON.parse(readFileSync(`${FIXTURES}/coversheets-registry.json`, "utf8"));
+
+  it("charge un registre valide", () => {
+    expect(isRegistryFile(registry)).toBe(true);
+  });
+
+  const report = crossCheck({ plan, coversheets: registryToCoversheets(registry) });
+
+  it("detecte CS 25.703 sans coversheet (defaut volontaire)", () => {
+    expect(report.uncovered).toContain("CS 25.703");
+  });
+
+  it("detecte la coversheet CS 25.1329 hors plan (defaut volontaire)", () => {
+    expect(report.orphans).toContain("CS 25.1329");
+  });
+
+  it("detecte le doublon sur CS 25.675 (defaut volontaire)", () => {
+    expect(report.duplicated).toContain("CS 25.675");
+  });
+
+  it("detecte les MoC manquants sur CS 25.671 (defaut volontaire)", () => {
+    const moc = report.results.find((r) => r.id.startsWith("crosscheck.moc.CS 25.671"));
+    expect(moc?.status).toBe("error");
+    expect(moc?.detail).toContain("MC3");
+  });
+
+  it("chiffre la couverture du plan", () => {
+    expect(report.coverageRatio).toBeGreaterThan(0.5);
+    expect(report.coverageRatio).toBeLessThan(1);
+  });
+});

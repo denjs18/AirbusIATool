@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/*
+ * Palette sobre, lisible en salle de reunion comme en videoprojection.
+ * Les couleurs de statut sont volontairement contrastees : en revue de
+ * certification, la distinction "conforme / a verifier / non conforme" doit
+ * etre lisible sans commentaire.
+ */
+@theme {
+  --color-ink-50: #f6f7f9;
+  --color-ink-100: #eceef2;
+  --color-ink-200: #d5dae2;
+  --color-ink-300: #b0b9c7;
+  --color-ink-400: #7d8798;
+  --color-ink-500: #5b6577;
+  --color-ink-600: #444c5c;
+  --color-ink-700: #333a47;
+  --color-ink-800: #222831;
+  --color-ink-900: #14181f;
+  --color-ink-950: #0c0f14;
+
+  --color-brand-500: #1e5aa8;
+  --color-brand-600: #17497f;
+  --color-brand-700: #123a67;
+
+  --color-ok-500: #157f4a;
+  --color-ok-100: #dcf3e6;
+  --color-warn-500: #a06a00;
+  --color-warn-100: #fbeecd;
+  --color-err-500: #b3261e;
+  --color-err-100: #fbdcda;
+  --color-info-500: #1e5aa8;
+  --color-info-100: #dde8f7;
+}
+
+:root {
+  --surface: var(--color-ink-50);
+  --surface-raised: #ffffff;
+  --border: var(--color-ink-200);
+  --text: var(--color-ink-900);
+  --text-muted: var(--color-ink-500);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: var(--color-ink-950);
+    --surface-raised: var(--color-ink-900);
+    --border: var(--color-ink-700);
+    --text: var(--color-ink-100);
+    --text-muted: var(--color-ink-400);
+
+    --color-ok-100: #10301f;
+    --color-warn-100: #33260a;
+    --color-err-100: #3a1310;
+    --color-info-100: #10243c;
+    --color-ok-500: #4fbc82;
+    --color-warn-500: #e0a834;
+    --color-err-500: #f08078;
+    --color-info-500: #6ba4e8;
+  }
+}
+
+body {
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Les tableaux de resultats peuvent etre larges : ils defilent dans leur cadre,
+   jamais la page entiere. */
+.scroll-x {
+  overflow-x: auto;
+  max-width: 100%;
+}

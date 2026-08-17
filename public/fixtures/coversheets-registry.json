@@ -1,0 +1,204 @@
+{
+  "_avertissement": "Donnees fictives generees pour le POC. Simule un export du referentiel documentaire.",
+  "programme": "A32N-DEMO",
+  "ataChapter": "27",
+  "coversheets": [
+    {
+      "documentRef": "CVS-27-FCS-0001",
+      "requirement": "CS 25.671",
+      "amendment": "Amdt 26",
+      "moc": [
+        "MC1",
+        "MC2"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0002",
+      "requirement": "CS 25.672",
+      "moc": [
+        "MC1",
+        "MC3"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0003",
+      "requirement": "CS 25.675",
+      "moc": [
+        "MC1",
+        "MC4"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0004",
+      "requirement": "CS 25.677",
+      "moc": [
+        "MC1",
+        "MC4",
+        "MC6"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0005",
+      "requirement": "CS 25.1309(b)",
+      "moc": [
+        "MC2",
+        "MC3",
+        "MC9"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0023",
+      "requirement": "CS 25.1309(c)",
+      "moc": [
+        "MC3"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0024",
+      "requirement": "AMC 25.1309",
+      "moc": [
+        "MC2",
+        "MC3"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0006",
+      "requirement": "CS 25.1322",
+      "moc": [
+        "MC1",
+        "MC7"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0007",
+      "requirement": "CS 25.143",
+      "moc": [
+        "MC2",
+        "MC6",
+        "MC8"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0008",
+      "requirement": "CS 25.681",
+      "moc": [
+        "MC2",
+        "MC4"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0009",
+      "requirement": "CS 25.683",
+      "moc": [
+        "MC5"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0010",
+      "requirement": "CS 25.685",
+      "moc": [
+        "MC1",
+        "MC4"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0011",
+      "requirement": "CS 25.689",
+      "moc": [
+        "MC1",
+        "MC4"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0012",
+      "requirement": "CS 25.693",
+      "moc": [
+        "MC1"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0013",
+      "requirement": "CS 25.697",
+      "moc": [
+        "MC1",
+        "MC5",
+        "MC6"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0014",
+      "requirement": "CS 25.699",
+      "moc": [
+        "MC1",
+        "MC5"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0015",
+      "requirement": "CS 25.701",
+      "moc": [
+        "MC1",
+        "MC2",
+        "MC4"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0016",
+      "requirement": "CS 25.1301",
+      "moc": [
+        "MC1",
+        "MC9"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0017",
+      "requirement": "SC F-12",
+      "moc": [
+        "MC1",
+        "MC3",
+        "MC6"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0018",
+      "requirement": "CRI F-01",
+      "moc": [
+        "MC2",
+        "MC8"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0019",
+      "requirement": "CRI B-14",
+      "moc": [
+        "MC1",
+        "MC7"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0020",
+      "requirement": "ESF F-03",
+      "moc": [
+        "MC1",
+        "MC3"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0021",
+      "requirement": "CS 25.1329",
+      "moc": [
+        "MC1",
+        "MC6",
+        "MC8"
+      ]
+    },
+    {
+      "documentRef": "CVS-27-FCS-0022",
+      "requirement": "CS 25.675",
+      "moc": [
+        "MC1",
+        "MC4"
+      ]
+    }
+  ]
+}
