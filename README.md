@@ -50,6 +50,15 @@ npm run dev          # http://localhost:3000
 Chaque module dispose d'un bouton **« Charger l'exemple fictif »** : la démonstration
 fonctionne sans aucun fichier à fournir.
 
+L'application n'a aucune route serveur, elle se construit donc aussi en fichiers inertes :
+
+```bash
+npm run build:static # produit out/, servable depuis n'importe quel serveur de fichiers
+```
+
+Voir [DEPLOIEMENT.md](DEPLOIEMENT.md) pour le parcours de démonstration, le déploiement
+Vercel et le mode statique à instruire avec l'IT.
+
 ## Jeux de données fictifs
 
 `public/fixtures/`, régénérables par `npm run fixtures` :
