@@ -54,6 +54,13 @@ export default function Home() {
           demonstration de conformite et ne se substituent pas a la revue des ingenieurs de
           certification ni a l&apos;examen de l&apos;Agence.
         </p>
+        <p className="mt-2">
+          Un probleme de lecture des PDF sur cet appareil ?{" "}
+          <a href="/diagnostic" className="text-brand-500 hover:underline">
+            Lancer le diagnostic de compatibilite
+          </a>
+          .
+        </p>
       </footer>
     </main>
   );

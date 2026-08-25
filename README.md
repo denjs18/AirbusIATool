@@ -100,13 +100,28 @@ pour simuler un iPhone antérieur à iOS 17.4, et vérifie que la lecture de PDF
 quand même. C'est ce qui manquait quand le build par défaut de pdf.js a été livré : il
 appelle cette API sans repli et le chargement échouait sur ces appareils.
 
+### Page de diagnostic
+
+`/diagnostic` teste ce que le navigateur sait faire et rejoue la lecture d'un PDF **étape
+par étape** (téléchargement, worker, chargement de pdf.js, ouverture du document,
+extraction, analyse), avec la pile d'appel complète en cas d'échec. Elle produit un
+rapport copiable.
+
+Elle existe parce qu'un échec sur un appareil qu'on n'a pas sous la main se diagnostique
+mal à distance : un message minifié tronqué ne suffit pas à identifier la cause, et
+corriger au jugé fait perdre un aller-retour à chaque fois.
+
 ### Pourquoi le build « legacy » de pdf.js
 
 `lib/pdf.ts` charge `pdfjs-dist/legacy/build/pdf.mjs`, et `scripts/copy-pdf-worker.mjs`
-copie le worker legacy correspondant. Un polyfill posé dans le thread principal ne suffit
-pas : **le worker pdf.js s'exécute dans un scope séparé** qu'il n'atteint pas. Seul le
-build legacy, transpilé et polyfillé des deux côtés, corrige le problème — vérifié en
-reproduisant la panne puis en la levant.
+copie le worker legacy correspondant. Ce build embarque les polyfills core-js
+(`Promise.withResolvers`, `Object.hasOwn`, `Array.prototype.at`…) côté script comme côté
+worker — un polyfill posé dans le thread principal ne suffirait pas, le worker s'exécutant
+dans un scope séparé.
+
+`package.json` déclare aussi un `browserslist` explicite (`safari >= 14`, `ios_saf >= 14`).
+Sans cette cible, Next compile pour navigateurs récents uniquement et ne transpile pas la
+syntaxe moderne du code applicatif.
 
 ## Organisation du code
 
