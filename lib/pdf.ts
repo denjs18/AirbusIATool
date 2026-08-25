@@ -96,18 +96,113 @@ async function loadPdfJs() {
   return pdfjs;
 }
 
+let moduleWorkerProbe: Promise<boolean> | undefined;
+
+/**
+ * Verifie qu'un worker de type module demarre et communique reellement.
+ *
+ * On n'interroge pas une capacite declaree : on en cree un, minimal, et on
+ * attend son message. Les workers de type module n'existent qu'a partir de
+ * Safari 15 ; sur un appareil plus ancien la creation echoue, et pdf.js se
+ * rabat alors sur un chemin qui depend d'un import dynamique fragile.
+ */
+function moduleWorkerWorks(): Promise<boolean> {
+  moduleWorkerProbe ??= new Promise<boolean>((resolve) => {
+    if (typeof Worker !== "function") {
+      resolve(false);
+      return;
+    }
+
+    let worker: Worker;
+    try {
+      worker = new Worker("data:text/javascript,self.postMessage(1)", { type: "module" });
+    } catch {
+      resolve(false);
+      return;
+    }
+
+    const finish = (works: boolean) => {
+      clearTimeout(timer);
+      worker.terminate();
+      resolve(works);
+    };
+    // Un worker qui ne repond pas rapidement est considere comme indisponible :
+    // mieux vaut un repli sur que l'attente d'un message qui ne viendra pas.
+    const timer = setTimeout(() => finish(false), 1500);
+    worker.addEventListener("message", () => finish(true), { once: true });
+    worker.addEventListener("error", () => finish(false), { once: true });
+  });
+  return moduleWorkerProbe;
+}
+
+let mainThreadWorkerLoaded: Promise<void> | undefined;
+
+/**
+ * Charge le code du worker dans le thread principal et l'enregistre sous le nom
+ * que pdf.js consulte en priorite pour son mode sans worker.
+ *
+ * Quand le worker dedie ne peut pas demarrer, pdf.js se rabat sur un import
+ * dynamique de l'URL du worker, annote `webpackIgnore`. Cette annotation est
+ * propre a webpack, et l'import depend du reseau : si l'un ou l'autre echoue,
+ * la lecture echoue.
+ *
+ * Deux raisons d'enregistrer ce module nous-memes, et de le faire AVANT toute
+ * lecture :
+ *  - il vient du bundle de l'application, donc ni resolution exotique ni
+ *    requete reseau supplementaire au moment critique ;
+ *  - pdf.js memorise le resultat de sa mise en place de worker. Un
+ *    enregistrement posterieur au premier echec serait purement ignore, le
+ *    resultat en echec etant reutilise tel quel.
+ */
+function loadMainThreadWorker(): Promise<void> {
+  mainThreadWorkerLoaded ??= (async () => {
+    const workerModule = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs");
+    (globalThis as Record<string, unknown>).pdfjsWorker = workerModule;
+  })();
+  return mainThreadWorkerLoaded;
+}
+
+type ExecutionPath = "worker dedie" | "thread principal";
+
+let executionPath: ExecutionPath | undefined;
+
+/**
+ * Chemin d'execution retenu lors de la derniere lecture.
+ * Expose sous forme de fonction : une variable exportee serait capturee a
+ * l'import, donc lue avant meme la lecture du document.
+ */
+export function lastExecutionPath(): ExecutionPath | undefined {
+  return executionPath;
+}
+
 /** Extrait le texte page par page d'un PDF, sans quitter le navigateur. */
 export async function extractPdfText(
   file: File | ArrayBuffer,
   sourceName = "document.pdf",
 ): Promise<PdfDocumentText> {
   const pdfjs = await loadPdfJs();
+  // L'enregistrement du module de repli force pdf.js en mode sans worker de
+  // maniere definitive : on ne le fait que si le worker ne peut pas demarrer,
+  // sinon un gros ACP figerait l'interface pendant son analyse.
+  if (!(await moduleWorkerWorks())) {
+    await loadMainThreadWorker();
+  }
+
   const data = file instanceof ArrayBuffer ? file : await file.arrayBuffer();
   const name = file instanceof ArrayBuffer ? sourceName : file.name;
 
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
-  const pages: PdfPage[] = [];
+  const task = pdfjs.getDocument({ data: new Uint8Array(data) });
+  const pdf = await task.promise;
 
+  // Le port d'un worker reel est l'instance Worker elle-meme ; en mode sans
+  // worker, pdf.js utilise un port en boucle locale.
+  const taskInternals = task as unknown as { _worker?: { port?: unknown } };
+  executionPath =
+    typeof Worker === "function" && taskInternals._worker?.port instanceof Worker
+      ? "worker dedie"
+      : "thread principal";
+
+  const pages: PdfPage[] = [];
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
@@ -118,11 +213,10 @@ export async function extractPdfText(
       });
       page.cleanup();
     }
+    return { sourceName: name, pages, pageCount: pdf.numPages };
   } finally {
     await pdf.destroy();
   }
-
-  return { sourceName: name, pages, pageCount: pdf.numPages };
 }
 
 /**

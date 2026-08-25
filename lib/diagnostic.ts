@@ -95,9 +95,96 @@ function describeError(cause: unknown): Pick<StepResult, "detail" | "errorName" 
  * Rejoue la chaine de lecture PDF etape par etape.
  * On s'arrete a la premiere etape en echec : les suivantes en dependent.
  */
+type Recorder = (step: string, run: () => Promise<string>) => Promise<boolean>;
+
+/**
+ * Chaine pdf.js brute, etape par etape, pour situer une panne.
+ * Chaque etape depend de la precedente : on s'arrete a la premiere en echec.
+ */
+async function runPdfJsChain(record: Recorder, path: string): Promise<void> {
+  let buffer: ArrayBuffer | undefined;
+  let pdfjs: typeof import("pdfjs-dist") | undefined;
+  let doc: Awaited<ReturnType<typeof import("pdfjs-dist").getDocument>["promise"]> | undefined;
+
+  if (
+    !(await record("3. Telechargement du PDF", async () => {
+      const response = await fetch(path);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      buffer = await response.arrayBuffer();
+      return `${Math.round(buffer.byteLength / 1024)} Ko recus`;
+    }))
+  ) {
+    return;
+  }
+
+  if (
+    !(await record("4. Telechargement du worker", async () => {
+      const response = await fetch("/pdf.worker.min.mjs");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const type = response.headers.get("content-type") ?? "inconnu";
+      const size = (await response.arrayBuffer()).byteLength;
+      return `${Math.round(size / 1024)} Ko, content-type ${type}`;
+    }))
+  ) {
+    return;
+  }
+
+  if (
+    !(await record("5. Chargement du module pdf.js", async () => {
+      pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof import("pdfjs-dist");
+      pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+      return `version ${(pdfjs as unknown as { version?: string }).version ?? "inconnue"}`;
+    }))
+  ) {
+    return;
+  }
+
+  if (
+    !(await record("6. Ouverture du document (pdf.js seul)", async () => {
+      doc = await pdfjs!.getDocument({ data: new Uint8Array(buffer!) }).promise;
+      return `${doc.numPages} pages`;
+    }))
+  ) {
+    return;
+  }
+
+  await record("7. Extraction du texte (pdf.js seul)", async () => {
+    const page = await doc!.getPage(1);
+    const content = await page.getTextContent();
+    return `${content.items.length} fragments sur la page 1`;
+  });
+}
+
+/**
+ * Chemin reellement emprunte par l'application.
+ *
+ * Execute independamment de la chaine brute : si celle-ci echoue, on veut
+ * savoir si l'application s'en sort malgre tout, et si l'echec vient de pdf.js
+ * ou du code d'analyse maison.
+ */
+async function runApplicationChain(record: Recorder, path: string): Promise<void> {
+  await record("1. Lecture d'un PDF par l'application", async () => {
+    const { extractPdfText, lastExecutionPath } = await import("./pdf");
+    const response = await fetch(path);
+    const extracted = await extractPdfText(await response.arrayBuffer(), "diagnostic.pdf");
+    return `${extracted.pageCount} pages, via ${lastExecutionPath() ?? "chemin inconnu"}`;
+  });
+
+  await record("2. Analyse du plan (code applicatif)", async () => {
+    const [{ extractPdfText }, { parsePlan }] = await Promise.all([
+      import("./pdf"),
+      import("./parse-acp"),
+    ]);
+    const response = await fetch(path);
+    const plan = parsePlan(await extractPdfText(await response.arrayBuffer(), "diagnostic.pdf"));
+    return `${plan.requirements.length} exigences extraites`;
+  });
+}
+
+/** Rejoue la lecture PDF, chaine brute puis chemin applicatif. */
 export async function runPdfPipeline(path: string): Promise<StepResult[]> {
   const steps: StepResult[] = [];
-  const record = async (step: string, run: () => Promise<string>) => {
+  const record: Recorder = async (step, run) => {
     try {
       steps.push({ step, ok: true, detail: await run() });
       return true;
@@ -107,67 +194,11 @@ export async function runPdfPipeline(path: string): Promise<StepResult[]> {
     }
   };
 
-  let buffer: ArrayBuffer | undefined;
-  let pdfjs: typeof import("pdfjs-dist") | undefined;
-  let doc: Awaited<ReturnType<typeof import("pdfjs-dist").getDocument>["promise"]> | undefined;
-
-  if (
-    !(await record("1. Telechargement du PDF", async () => {
-      const response = await fetch(path);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      buffer = await response.arrayBuffer();
-      return `${Math.round(buffer.byteLength / 1024)} Ko recus`;
-    }))
-  ) {
-    return steps;
-  }
-
-  if (
-    !(await record("2. Telechargement du worker", async () => {
-      const response = await fetch("/pdf.worker.min.mjs");
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const type = response.headers.get("content-type") ?? "inconnu";
-      const size = (await response.arrayBuffer()).byteLength;
-      return `${Math.round(size / 1024)} Ko, content-type ${type}`;
-    }))
-  ) {
-    return steps;
-  }
-
-  if (
-    !(await record("3. Chargement du module pdf.js", async () => {
-      pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as typeof import("pdfjs-dist");
-      pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-      return `version ${(pdfjs as unknown as { version?: string }).version ?? "inconnue"}`;
-    }))
-  ) {
-    return steps;
-  }
-
-  if (
-    !(await record("4. Ouverture du document", async () => {
-      doc = await pdfjs!.getDocument({ data: new Uint8Array(buffer!) }).promise;
-      return `${doc.numPages} pages`;
-    }))
-  ) {
-    return steps;
-  }
-
-  await record("5. Extraction du texte", async () => {
-    const page = await doc!.getPage(1);
-    const content = await page.getTextContent();
-    return `${content.items.length} fragments sur la page 1`;
-  });
-
-  await record("6. Analyse des exigences", async () => {
-    const { extractOccurrencesFromPage } = await import("./requirements");
-    const page = await doc!.getPage(2);
-    const content = await page.getTextContent();
-    const { itemsToLines } = await import("./pdf");
-    const text = itemsToLines(content.items as { str: string; transform: number[] }[]).join("\n");
-    return `${extractOccurrencesFromPage(text, 2).length} exigences sur la page 2`;
-  });
-
+  // L'ordre compte : pdf.js memorise le resultat de sa mise en place de worker
+  // pour toute la duree de la page. Solliciter pdf.js en direct d'abord ferait
+  // echouer ensuite le chemin applicatif, alors meme qu'il fonctionne.
+  await runApplicationChain(record, path);
+  await runPdfJsChain(record, path);
   return steps;
 }
 

@@ -95,10 +95,33 @@ node scripts/smoke.mjs          # enchaînement réel des cinq modules
 node scripts/smoke-legacy.mjs   # compatibilité navigateur ancien
 ```
 
-`smoke-legacy.mjs` supprime `Promise.withResolvers` avant tout chargement de script
-pour simuler un iPhone antérieur à iOS 17.4, et vérifie que la lecture de PDF fonctionne
-quand même. C'est ce qui manquait quand le build par défaut de pdf.js a été livré : il
-appelle cette API sans repli et le chargement échouait sur ces appareils.
+```bash
+node scripts/smoke-noworker.mjs  # worker pdf.js totalement indisponible
+```
+
+`smoke-legacy.mjs` supprime `Promise.withResolvers` pour simuler un moteur antérieur à
+iOS 17.4. `smoke-noworker.mjs` neutralise à la fois la création de workers de type module
+et le chargement réseau du fichier worker, et vérifie que la lecture de PDF aboutit quand
+même.
+
+### Repli quand le worker pdf.js ne démarre pas
+
+pdf.js crée son worker avec `new Worker(src, { type: "module" })` — indisponible avant
+Safari 15. En cas d'échec, il se rabat sur un import dynamique de l'URL du worker, annoté
+`webpackIgnore` : une directive propre à webpack, dépendante du réseau, et **jamais
+exercée sur un poste de bureau** où le worker dédié fonctionne toujours.
+
+`lib/pdf.ts` teste donc réellement le support (création d'un worker minimal, attente de
+son message) et, s'il manque, enregistre le module worker **embarqué dans le bundle** sous
+`globalThis.pdfjsWorker`. Deux contraintes dictent ce fonctionnement :
+
+- l'enregistrement doit précéder la première lecture — pdf.js mémorise le résultat de sa
+  mise en place de worker, un enregistrement tardif serait ignoré ;
+- il doit rester conditionnel — enregistrer ce module force le mode sans worker de façon
+  définitive (`PDFWorker.#initialize`), ce qui figerait l'interface sur un ACP volumineux.
+
+Le même effet mémoire impose l'ordre des étapes de `/diagnostic` : le chemin applicatif est
+testé **avant** la chaîne pdf.js brute, sinon celle-ci ferait échouer celui-là.
 
 ### Page de diagnostic
 
