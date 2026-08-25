@@ -10,13 +10,14 @@
 import { useState } from "react";
 import { Button, Card, Empty, FileInput, Metric, ResultList } from "../ui";
 import { summarize } from "@/lib/coherence";
+import { DEMO_FILES, describeLoadError, loadDemoPdf } from "@/lib/demo";
 import { checkHeader, parseHeader } from "@/lib/headers";
 import { extractPdfText } from "@/lib/pdf";
 import type { CheckResult, DocumentHeader } from "@/lib/types";
 
 const DEMOS = [
-  { label: "Coversheet fictive (defauts)", path: "/fixtures/CVS-27-FCS-0001_Iss2.pdf" },
-  { label: "ACP fictif (conforme)", path: "/fixtures/ACP-27-CER-0114_Iss3.pdf" },
+  { label: "Coversheet fictive (defauts)", path: DEMO_FILES.coversheet },
+  { label: "ACP fictif (conforme)", path: DEMO_FILES.acp },
 ];
 
 const FIELD_LABELS: [keyof DocumentHeader, string][] = [
@@ -61,16 +62,11 @@ export default function HeaderPanel() {
     setError(undefined);
     try {
       const document =
-        typeof source === "string"
-          ? await extractPdfText(
-              await (await fetch(source)).arrayBuffer(),
-              source.split("/").pop(),
-            )
-          : await extractPdfText(source);
+        typeof source === "string" ? await loadDemoPdf(source) : await extractPdfText(source);
       setSourceName(document.sourceName);
       analyse(parseHeader(document.pages[0]?.text ?? ""));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Lecture impossible.");
+      setError(describeLoadError(cause));
     } finally {
       setBusy(false);
     }

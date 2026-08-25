@@ -86,13 +86,27 @@ npm test             # 103 tests : logique métier + intégration sur les PDF r�
 **chaque défaut volontaire est bien détecté**. Si une régression casse la démonstration,
 ce test tombe avant la réunion.
 
-Smoke test navigateur, qui valide l'enchaînement réel des cinq modules :
+Deux smoke tests navigateur :
 
 ```bash
 npm run build && npx next start -p 3210
 npm install --no-save playwright
-node scripts/smoke.mjs
+node scripts/smoke.mjs          # enchaînement réel des cinq modules
+node scripts/smoke-legacy.mjs   # compatibilité navigateur ancien
 ```
+
+`smoke-legacy.mjs` supprime `Promise.withResolvers` avant tout chargement de script
+pour simuler un iPhone antérieur à iOS 17.4, et vérifie que la lecture de PDF fonctionne
+quand même. C'est ce qui manquait quand le build par défaut de pdf.js a été livré : il
+appelle cette API sans repli et le chargement échouait sur ces appareils.
+
+### Pourquoi le build « legacy » de pdf.js
+
+`lib/pdf.ts` charge `pdfjs-dist/legacy/build/pdf.mjs`, et `scripts/copy-pdf-worker.mjs`
+copie le worker legacy correspondant. Un polyfill posé dans le thread principal ne suffit
+pas : **le worker pdf.js s'exécute dans un scope séparé** qu'il n'atteint pas. Seul le
+build legacy, transpilé et polyfillé des deux côtés, corrige le problème — vérifié en
+reproduisant la panne puis en la levant.
 
 ## Organisation du code
 

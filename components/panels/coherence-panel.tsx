@@ -10,20 +10,14 @@
 import { useState } from "react";
 import { Button, Card, Empty, FileInput, Metric, ResultList } from "../ui";
 import { checkCitations, extractChapters, extractCitations, summarize } from "@/lib/coherence";
+import { DEMO_FILES, describeLoadError, loadDemoPdf } from "@/lib/demo";
 import { downloadText, safeFileName } from "@/lib/download";
 import { parseHeader } from "@/lib/headers";
 import { extractPdfText, textToDocument } from "@/lib/pdf";
 import type { CheckResult, DocumentChapter, PdfDocumentText } from "@/lib/types";
 
-const DEMO_COVERSHEET = "/fixtures/CVS-27-FCS-0001_Iss2.pdf";
-const DEMO_SUBSTANTIATION = "/fixtures/DOC-27-SAF-0142_Iss2.pdf";
-
 async function loadPdf(source: File | string): Promise<PdfDocumentText> {
-  if (typeof source === "string") {
-    const response = await fetch(source);
-    return extractPdfText(await response.arrayBuffer(), source.split("/").pop());
-  }
-  return extractPdfText(source);
+  return typeof source === "string" ? loadDemoPdf(source) : extractPdfText(source);
 }
 
 export default function CoherencePanel() {
@@ -43,7 +37,7 @@ export default function CoherencePanel() {
       setCiting(document);
       setResults(undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Lecture impossible.");
+      setError(describeLoadError(cause));
     } finally {
       setBusy(undefined);
     }
@@ -58,7 +52,7 @@ export default function CoherencePanel() {
       setChapters(extractChapters(document.pages));
       setResults(undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Lecture impossible.");
+      setError(describeLoadError(cause));
     } finally {
       setBusy(undefined);
     }
@@ -97,7 +91,7 @@ export default function CoherencePanel() {
             busy={busy === "citing"}
             loaded={citing?.sourceName}
             onFile={(file) => loadCiting(file)}
-            onDemo={() => loadCiting(DEMO_COVERSHEET)}
+            onDemo={() => loadCiting(DEMO_FILES.coversheet)}
             demoLabel="Charger la coversheet fictive"
           />
           <FileInput
@@ -110,7 +104,7 @@ export default function CoherencePanel() {
                 : undefined
             }
             onFile={(file) => loadSubstantiation(file)}
-            onDemo={() => loadSubstantiation(DEMO_SUBSTANTIATION)}
+            onDemo={() => loadSubstantiation(DEMO_FILES.substantiation)}
             demoLabel="Charger le dossier de securite fictif"
           />
         </div>

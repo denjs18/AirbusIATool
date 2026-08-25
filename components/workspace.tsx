@@ -60,10 +60,10 @@ export default function Workspace() {
       </nav>
 
       {tab === "plan" && <PlanPanel plan={plan} onPlan={setPlan} />}
-      {tab === "coversheets" && <CoversheetsPanel plan={plan} />}
+      {tab === "coversheets" && <CoversheetsPanel plan={plan} onPlan={setPlan} />}
       {tab === "coherence" && <CoherencePanel />}
       {tab === "headers" && <HeaderPanel />}
-      {tab === "crosscheck" && <CrossCheckPanel plan={plan} />}
+      {tab === "crosscheck" && <CrossCheckPanel plan={plan} onPlan={setPlan} />}
     </div>
   );
 }

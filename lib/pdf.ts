@@ -5,6 +5,14 @@
  * l'onglet du poste utilisateur. Les documents ne sont jamais televerses, il n'y
  * a pas de stockage serveur et pas d'appel a un service externe. C'est ce qui
  * permet d'envisager l'outil sans instruction d'accessibilite des donnees.
+ *
+ * On utilise volontairement le build "legacy" de pdf.js, et non le build par
+ * defaut. Le build par defaut appelle Promise.withResolvers() sans repli, une
+ * API disponible seulement a partir de Safari 17.4 / iOS 17.4 : sur un iPhone
+ * plus ancien, le chargement d'un PDF echoue avec un message incomprehensible.
+ * Le build legacy est transpile et embarque les polyfills necessaires. Un outil
+ * de demonstration doit fonctionner sur le telephone de la personne en face,
+ * pas seulement sur un poste a jour.
  */
 import type { PdfDocumentText, PdfPage } from "./types";
 
@@ -49,9 +57,41 @@ export function itemsToLines(items: TextItem[]): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Filet de securite pour le thread principal sur les navigateurs anterieurs a
+ * Safari 17.4 / iOS 17.4.
+ *
+ * A lui seul, ce polyfill ne suffit pas : le worker pdf.js s'execute dans un
+ * scope separe qu'il n'atteint pas. C'est le build legacy, transpile et
+ * polyfille cote script comme cote worker, qui corrige reellement le probleme
+ * (verifie par scripts/smoke-legacy.mjs). On le conserve pour couvrir le code
+ * applicatif du thread principal.
+ */
+function ensurePromiseWithResolvers() {
+  const target = Promise as unknown as {
+    withResolvers?: <T>() => {
+      promise: Promise<T>;
+      resolve: (value: T | PromiseLike<T>) => void;
+      reject: (reason?: unknown) => void;
+    };
+  };
+  if (typeof target.withResolvers === "function") return;
+
+  target.withResolvers = function withResolvers<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
+
 /** Charge pdf.js a la demande et pointe le worker servi en statique. */
 async function loadPdfJs() {
-  const pdfjs = await import("pdfjs-dist");
+  ensurePromiseWithResolvers();
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
   return pdfjs;
 }

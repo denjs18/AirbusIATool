@@ -11,9 +11,13 @@ const require = createRequire(import.meta.url);
 try {
   const pdfjsEntry = require.resolve("pdfjs-dist/package.json");
   const root = dirname(pdfjsEntry);
+  // Le worker doit correspondre au build charge par lib/pdf.ts : le build
+  // legacy, transpile, pour rester compatible des navigateurs plus anciens
+  // (Safari / iOS anterieurs a 17.4).
   const candidates = [
+    join(root, "legacy", "build", "pdf.worker.min.mjs"),
+    join(root, "legacy", "build", "pdf.worker.mjs"),
     join(root, "build", "pdf.worker.min.mjs"),
-    join(root, "build", "pdf.worker.mjs"),
   ];
   const source = candidates.find((p) => existsSync(p));
   if (!source) {

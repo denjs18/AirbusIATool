@@ -8,16 +8,24 @@
  * revue : "le perimetre est-il couvert, sans coversheet hors plan ?".
  */
 import { useMemo, useState } from "react";
+import PlanRequired from "./plan-required";
 import { Button, Card, Empty, FileInput, Metric, ResultList } from "../ui";
 import { crossCheck, renderCrossCheckCsv } from "@/lib/crosscheck";
 import { downloadText, safeFileName } from "@/lib/download";
+import { DEMO_FILES, describeLoadError } from "@/lib/demo";
 import { isRegistryFile, registryToCoversheets } from "@/lib/registry";
 import type { RegistryFile } from "@/lib/registry";
 import type { ParsedPlan } from "@/lib/types";
 
-const DEMO_REGISTRY = "/fixtures/coversheets-registry.json";
 
-export default function CrossCheckPanel({ plan }: { plan?: ParsedPlan }) {
+
+export default function CrossCheckPanel({
+  plan,
+  onPlan,
+}: {
+  plan?: ParsedPlan;
+  onPlan: (plan: ParsedPlan) => void;
+}) {
   const [registry, setRegistry] = useState<RegistryFile>();
   const [registryName, setRegistryName] = useState<string>();
   const [paragraphLevel, setParagraphLevel] = useState(false);
@@ -39,7 +47,7 @@ export default function CrossCheckPanel({ plan }: { plan?: ParsedPlan }) {
       setRegistry(parsed);
       setRegistryName(typeof source === "string" ? source.split("/").pop() : source.name);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Lecture du registre impossible.");
+      setError(describeLoadError(cause));
     } finally {
       setBusy(false);
     }
@@ -59,9 +67,11 @@ export default function CrossCheckPanel({ plan }: { plan?: ParsedPlan }) {
 
   if (!plan) {
     return (
-      <Card title="Recoupement ACP / coversheets">
-        <Empty>Importez d&apos;abord un plan de certification dans l&apos;onglet 1.</Empty>
-      </Card>
+      <PlanRequired
+        title="Recoupement ACP / coversheets"
+        explanation="Le recoupement confronte les exigences du plan aux coversheets deja emises. Chargez l'ACP fictif, puis le registre fictif de coversheets."
+        onPlan={onPlan}
+      />
     );
   }
 
@@ -77,7 +87,7 @@ export default function CrossCheckPanel({ plan }: { plan?: ParsedPlan }) {
           busy={busy}
           loaded={registryName}
           onFile={(file) => load(file)}
-          onDemo={() => load(DEMO_REGISTRY)}
+          onDemo={() => load(DEMO_FILES.registry)}
           demoLabel="Charger le registre fictif"
         />
 

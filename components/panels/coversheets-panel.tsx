@@ -9,7 +9,8 @@
  * redaction automatique.
  */
 import { useMemo, useState } from "react";
-import { Button, Card, Empty, Metric } from "../ui";
+import PlanRequired from "./plan-required";
+import { Button, Card, Metric } from "../ui";
 import { downloadText, safeFileName } from "@/lib/download";
 import {
   buildCoversheetsFromPlan,
@@ -20,7 +21,13 @@ import {
 import { MOC_DEFINITIONS } from "@/lib/moc";
 import type { ParsedPlan } from "@/lib/types";
 
-export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
+export default function CoversheetsPanel({
+  plan,
+  onPlan,
+}: {
+  plan?: ParsedPlan;
+  onPlan: (plan: ParsedPlan) => void;
+}) {
   const [author, setAuthor] = useState("");
   const [prefix, setPrefix] = useState("CVS-27-FCS");
   const [selected, setSelected] = useState(0);
@@ -38,9 +45,11 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
 
   if (!plan) {
     return (
-      <Card title="Trames de coversheets">
-        <Empty>Importez d&apos;abord un plan de certification dans l&apos;onglet 1.</Empty>
-      </Card>
+      <PlanRequired
+        title="Trames de coversheets"
+        explanation="Les trames sont generees a partir des exigences citees dans un plan de certification. Chargez l'ACP fictif pour voir les 24 trames se preparer."
+        onPlan={onPlan}
+      />
     );
   }
 

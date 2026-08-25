@@ -9,12 +9,11 @@
  */
 import { useState } from "react";
 import { Button, Card, Empty, FileInput, Metric } from "../ui";
+import { DEMO_FILES, describeLoadError, loadDemoPdf } from "@/lib/demo";
 import { downloadText, safeFileName } from "@/lib/download";
 import { parsePlan, planStats } from "@/lib/parse-acp";
 import { extractPdfText } from "@/lib/pdf";
 import type { ParsedPlan, RequirementKind } from "@/lib/types";
-
-const DEMO_ACP = "/fixtures/ACP-27-CER-0114_Iss3.pdf";
 
 const KIND_LABEL: Record<RequirementKind, string> = {
   CS: "Paragraphes CS-25",
@@ -41,15 +40,10 @@ export default function PlanPanel({
     setError(undefined);
     try {
       const document =
-        typeof source === "string"
-          ? await extractPdfText(
-              await (await fetch(source)).arrayBuffer(),
-              source.split("/").pop(),
-            )
-          : await extractPdfText(source);
+        typeof source === "string" ? await loadDemoPdf(source) : await extractPdfText(source);
       onPlan(parsePlan(document));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Lecture du PDF impossible.");
+      setError(describeLoadError(cause));
     } finally {
       setBusy(false);
     }
@@ -74,7 +68,7 @@ export default function PlanPanel({
           busy={busy}
           loaded={plan?.sourceName}
           onFile={(file) => load(file)}
-          onDemo={() => load(DEMO_ACP)}
+          onDemo={() => load(DEMO_FILES.acp)}
           demoLabel="Charger l'ACP fictif"
         />
         {error && <p className="mt-3 text-sm text-err-500">{error}</p>}
