@@ -6,7 +6,7 @@ import {
   renderCoversheetMarkdown,
   TO_BE_COMPLETED,
 } from "../lib/coversheet";
-import { applyGrouping, EMPTY_MEMORY, mergeMemory } from "../lib/grouping";
+import { applyTemplates, EMPTY_LIBRARY, mergeTemplates } from "../lib/templates";
 import { dedupeRequirements, extractOccurrencesFromPage } from "../lib/requirements";
 
 const SELECTION = dedupeRequirements(
@@ -29,8 +29,8 @@ const OPTIONS = {
   date: "2026-08-31",
 };
 
-const groupsOf = (rules: Parameters<typeof mergeMemory>[1] = []) =>
-  applyGrouping("SSA", SELECTION, mergeMemory(EMPTY_MEMORY, rules)).groups;
+const groupsOf = (templates: Parameters<typeof mergeTemplates>[1] = []) =>
+  applyTemplates("SSA", SELECTION, mergeTemplates(EMPTY_LIBRARY, templates)).blocks;
 
 describe("formatRequirementCitation", () => {
   it("restitue l'exigence telle qu'elle se cite, avec son qualifieur", () => {

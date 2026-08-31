@@ -12,6 +12,7 @@ import CoherencePanel from "./panels/coherence-panel";
 import CoversheetsPanel from "./panels/coversheets-panel";
 import CrossCheckPanel from "./panels/crosscheck-panel";
 import PlanPanel from "./panels/plan-panel";
+import TemplatesPanel from "./panels/templates-panel";
 import type { ParsedPlan } from "@/lib/types";
 
 const TABS = [
@@ -19,6 +20,7 @@ const TABS = [
   { id: "coversheets", label: "2. Preparer une coversheet", hint: "Exigences puis document de certification" },
   { id: "coherence", label: "3. Coherence des renvois", hint: "Chapitre cite / contenu reel" },
   { id: "crosscheck", label: "4. Recoupement", hint: "ACP / coversheets emises" },
+  { id: "templates", label: "Parametres", hint: "Blocs types et redactions memorisees" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -61,6 +63,7 @@ export default function Workspace() {
       {tab === "coversheets" && <CoversheetsPanel plan={plan} onPlan={setPlan} />}
       {tab === "coherence" && <CoherencePanel />}
       {tab === "crosscheck" && <CrossCheckPanel plan={plan} onPlan={setPlan} />}
+      {tab === "templates" && <TemplatesPanel />}
     </div>
   );
 }

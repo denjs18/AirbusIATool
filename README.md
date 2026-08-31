@@ -13,7 +13,8 @@ place des ingénieurs de certification.
 | Module | Tâche automatisée | Ce que produit l'outil |
 | --- | --- | --- |
 | 1. Plan de certification | Structurer l'information d'un ACP / OCP de plusieurs centaines de pages | Liste des exigences citées (CS-25, JAR-25, AMC, SC, CRI, ESF) avec page, section et moyens de conformité — export CSV |
-| 2. Préparer une coversheet | Monter la coversheet d'un document de certification | On sélectionne les exigences à couvrir puis le document ; l'outil monte les blocs de justification en rejouant les regroupements des coversheets précédentes — export Markdown |
+| 2. Préparer une coversheet | Monter la coversheet d'un document de certification | On désigne le document et on coche les exigences à couvrir ; l'outil restitue la rédaction mémorisée pour chaque combinaison, `§x.x` à pointer — export Markdown |
+| Paramètres | Tenir la bibliothèque de blocs types | Par famille de coversheet : quelles exigences vont ensemble, et la rédaction qui leur correspond |
 | 3. Cohérence des renvois | Vérifier qu'un chapitre cité correspond bien au contenu | Contrôle de chaque renvoi contre la structure réelle du PDF fourni : chapitre inexistant, titre divergent, issue obsolète |
 | 4. Recoupement ACP ↔ coversheets | Croiser les exigences de l'ACP avec les documents qui les couvrent | Exigences non couvertes, couvertures hors plan, doublons, MoC divergents, taux de couverture — export CSV |
 
@@ -23,13 +24,25 @@ Le tableau de conformité de l'ACP rattache chaque exigence à un document de ce
 On écrit **une coversheet par document**, et elle rassemble toutes les exigences que ce
 document traite, groupées par bloc de justification quand elles vont ensemble.
 
-Le regroupement relève du rédacteur, mais il se reconduit d'un standard à l'autre :
-l'outil observe les regroupements des coversheets précédentes (`lib/grouping.ts`) et les
-rejoue, en indiquant d'où vient chaque règle. Il ne groupe jamais de sa propre initiative.
+### La rédaction est restituée, jamais inventée
 
-**Ce que l'outil ne fait pas :** désigner les paragraphes à citer dans le document joint.
-Ils dépendent de son contenu et relèvent de sa lecture par l'ingénieur. Chaque
-justification est donc laissée vide et marquée `[A COMPLETER]`.
+D'un standard au suivant, une coversheet reprend la même rédaction : seuls les paragraphes
+cités changent, parce que le document joint a été réédité.
+
+L'onglet **Paramètres** tient une bibliothèque de **blocs types** (`lib/templates.ts`) :
+pour chaque famille de coversheet (SyDMP, SSA, VVS…), quelles exigences vont ensemble et
+quelle rédaction leur correspond. Les endroits où un chapitre devra être pointé s'écrivent
+`§x.x`.
+
+Au moment de préparer une coversheet, l'outil confronte la sélection à cette bibliothèque
+et restitue le texte correspondant. **Un bloc type ne s'applique que si toutes ses
+exigences sont sélectionnées** : c'est ce qui permet à `{A, B}` et à `{A}` seule d'appeler
+deux rédactions différentes. Les blocs les plus larges sont essayés d'abord, sinon `{A}`
+consommerait A avant que `{A, B}` n'ait sa chance.
+
+**Ce que l'outil ne fait pas :** désigner les paragraphes à citer. Ils dépendent du contenu
+du document joint et relèvent de sa lecture par l'ingénieur. L'outil compte les `§x.x`
+restants et les rappelle, sans jamais chercher à les deviner.
 
 ## Positionnement
 

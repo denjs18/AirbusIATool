@@ -13,6 +13,7 @@ import { crossCheck } from "../lib/crosscheck";
 import { parseHeader } from "../lib/headers";
 import { parsePlan, planStats } from "../lib/parse-acp";
 import { isRegistryFile, registryToCoverage } from "../lib/registry";
+import { applyTemplates, countPlaceholders, isTemplateLibrary } from "../lib/templates";
 import { extractPdfTextNode } from "./pdf-node";
 
 const FIXTURES = "public/fixtures";
@@ -145,5 +146,49 @@ describe("recoupement ACP / registre de coversheets", () => {
   it("chiffre la couverture du plan", () => {
     expect(report.coverageRatio).toBeGreaterThan(0.5);
     expect(report.coverageRatio).toBeLessThan(1);
+  });
+});
+
+/**
+ * La bibliotheque fictive et l'ACP fictif doivent parler des memes exigences.
+ *
+ * Ce test existe parce que les deux ont diverge une premiere fois : la
+ * bibliotheque citait "CS 25.671(a)" quand l'ACP produisait "CS 25.671", et
+ * plus aucune redaction n'etait restituee. Rien ne le signalait a l'ecran.
+ */
+describe("blocs types fictifs et ACP fictif", () => {
+  const plan = parsePlan(acpText);
+  const library = JSON.parse(readFileSync(`${FIXTURES}/blocs-types.json`, "utf8"));
+
+  it("charge une bibliotheque valide", () => {
+    expect(isTemplateLibrary(library)).toBe(true);
+  });
+
+  it("ne cite que des exigences que l'ACP produit reellement", () => {
+    const planIds = new Set(plan.requirements.map((requirement) => requirement.id));
+    const cited = [...new Set(library.templates.flatMap((t: { requirementIds: string[] }) => t.requirementIds))];
+    const orphans = cited.filter((id) => !planIds.has(id as string));
+    expect(orphans, `exigences absentes de l'ACP fictif : ${orphans.join(", ")}`).toEqual([]);
+  });
+
+  it("restitue une redaction differente selon la combinaison retenue", () => {
+    const byId = new Map(plan.requirements.map((r) => [r.id, r]));
+    const a = byId.get("CS 25.671(a)")!;
+    const b = byId.get("JAR 25.1301(a)")!;
+
+    const ensemble = applyTemplates("SYDMP", [a, b], library).blocks;
+    const seule = applyTemplates("SYDMP", [a], library).blocks;
+
+    expect(ensemble).toHaveLength(1);
+    expect(seule).toHaveLength(1);
+    expect(ensemble[0].justification).toBeDefined();
+    expect(seule[0].justification).toBeDefined();
+    expect(ensemble[0].justification).not.toBe(seule[0].justification);
+  });
+
+  it("laisse des reperes de paragraphe a pointer dans chaque redaction", () => {
+    for (const template of library.templates as { text: string }[]) {
+      expect(countPlaceholders(template.text)).toBeGreaterThan(0);
+    }
   });
 });

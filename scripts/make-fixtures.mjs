@@ -93,7 +93,12 @@ const acpPages = [
     "- CS 25.675 Stops. MoC: 1, 4.",
     "- CS 25.677 Trim systems. MoC: 1, 4, 6.",
     "",
-    t("2.2 Secondary requirements"),
+    t("2.2 Development assurance requirements"),
+    "The development assurance activities are covered by the following:",
+    "- CS 25.0671(a) amdt. 23, JAR 25.1301(a) ch. 11. MoC: 0.",
+    "- JAR 25.1309(a) ch. 11 as interpreted by CRI F-28 Appendix 1. MoC: 2.",
+    "",
+    t("2.3 Secondary requirements"),
     "- CS 25.681 Limit load static tests. MoC: 2, 4.",
     "- CS 25.683 Operation tests. MoC 5.",
     "- CS 25.685 Control system details. MoC: 1, 4.",
@@ -341,6 +346,83 @@ const registry = {
   ],
 };
 
+
+/* ------------------------------------------------------------------ */
+/* Bibliotheque de blocs types fictive                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Redactions inventees, calquees sur la forme d'une coversheet reelle mais
+ * sans en reprendre le contenu. Les identifiants d'exigences correspondent a
+ * ceux que produit l'ACP fictif ci-dessus : sans cela, rien ne serait restitue.
+ *
+ * La famille SYDMP porte volontairement deux blocs qui se recoupent, pour
+ * montrer qu'une meme exigence appelle une redaction differente selon qu'elle
+ * est traitee seule ou avec une autre.
+ */
+const blockTemplates = {
+  _avertissement:
+    "Donnees fictives. Redactions inventees pour la demonstration, aucun contenu de programme.",
+  templates: [
+    {
+      documentType: "SYDMP",
+      requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"],
+      text: [
+        "The enclosed SyDMP is the master plan describing the development assurance",
+        "activities to be performed for the change requests listed in \u00a7x.x, which are",
+        "considered in the current certification projects.",
+        "",
+        "The SyDMP references in \u00a7x.x the other plans describing the activities to be",
+        "performed, and provides in \u00a7x.x the list of applicable rules and the",
+        "development assurance referential.",
+      ].join("\n"),
+      source: "CVS-SYDMP fictive issue 1",
+    },
+    {
+      documentType: "SYDMP",
+      requirementIds: ["CS 25.671(a)"],
+      text: [
+        "The enclosed SyDMP describes in \u00a7x.x the development assurance activities",
+        "applicable to this requirement, and justifies in \u00a7x.x the deviations to the",
+        "applicable processes.",
+      ].join("\n"),
+      source: "CVS-SYDMP fictive issue 1",
+    },
+    {
+      documentType: "SSA",
+      requirementIds: ["CS 25.671(c)(1)", "CS 25.1309(b)"],
+      text: [
+        "Combinations of failures have been classified in \u00a7x.x, and adequate failure",
+        "probabilities are demonstrated in \u00a7x.x.",
+        "",
+        "In addition, the safety assessment shows in \u00a7x.x that the aeroplane is capable",
+        "of safe flight and landing after any single failure, and after any combination",
+        "of failures not shown to be extremely improbable.",
+      ].join("\n"),
+      source: "CVS-SSA fictive issue 4",
+    },
+    {
+      documentType: "SSA",
+      requirementIds: ["CS 25.672"],
+      text: [
+        "Chapter \u00a7x.x of the safety assessment provides the list of alerting and",
+        "demonstrates the adequate level of probability.",
+      ].join("\n"),
+      source: "CVS-SSA fictive issue 4",
+    },
+    {
+      documentType: "VVS",
+      requirementIds: ["CS 25.143", "CS 25.671"],
+      text: [
+        "The enclosed verification summary shows compliance to the requirements quoted",
+        "above by stating the correctness of the laboratory tests (\u00a7x.x) and the good",
+        "functioning in flight test (\u00a7x.x).",
+      ].join("\n"),
+      source: "CVS-VVS fictive issue 2",
+    },
+  ],
+};
+
 async function main() {
   await writePdf("ACP-27-CER-0114_Iss3.pdf", acpPages);
   await writePdf("DOC-27-SAF-0142_Iss2.pdf", safetyPages);
@@ -352,6 +434,12 @@ async function main() {
     `${JSON.stringify(registry, null, 2)}\n`,
   );
   console.log(`[fixtures] ${join(OUT_DIR, "coversheets-registry.json")}`);
+
+  writeFileSync(
+    join(OUT_DIR, "blocs-types.json"),
+    `${JSON.stringify(blockTemplates, null, 2)}\n`,
+  );
+  console.log(`[fixtures] ${join(OUT_DIR, "blocs-types.json")}`);
 }
 
 main().catch((error) => {

@@ -14,6 +14,7 @@
  * l'ingenieur, et restent donc a completer.
  */
 import { describeMoc } from "./moc";
+import { countPlaceholders } from "./templates";
 import type {
   Coversheet,
   DocumentHeader,
@@ -143,25 +144,42 @@ export function renderCoversheetMarkdown(coversheet: Coversheet): string {
     if (group.mocIds.length && group.mocIds.join() !== mocIds.join()) {
       lines.push(`- ${group.mocIds.map((id) => `MoC ${id}`).join(", ")}`, "");
     }
-    lines.push(
-      `${TO_BE_COMPLETED} : en quoi le document joint repond a ` +
-        (group.requirements.length > 1
-          ? "ces exigences, en citant les paragraphes concernes."
-          : "cette exigence, en citant les paragraphes concernes."),
-      "",
-    );
+    if (group.justification) {
+      // Redaction memorisee, restituee telle quelle. Les reperes de paragraphe
+      // qu'elle contient restent a completer : ils dependent de l'edition en
+      // cours du document joint.
+      lines.push(group.justification.trim(), "");
+    } else {
+      lines.push(
+        `${TO_BE_COMPLETED} : aucun bloc type memorise pour ` +
+          (group.requirements.length > 1 ? "ces exigences." : "cette exigence."),
+        "",
+      );
+    }
   });
 
   lines.push("---", "");
   lines.push("## Reste a completer", "");
-  lines.push(`- Objet du document joint.`);
+  lines.push("- Objet du document joint.");
   for (const document of enclosed) {
     if (!document.issue) lines.push(`- Issue du document ${document.ref}.`);
     if (!document.title) lines.push(`- Titre du document ${document.ref}.`);
   }
-  lines.push(
-    `- ${groups.length} justification${groups.length > 1 ? "s" : ""}, avec les paragraphes cites.`,
+
+  const placeholders = countPlaceholders(
+    groups.map((group) => group.justification ?? "").join(" "),
   );
+  if (placeholders) {
+    lines.push(`- ${placeholders} repere${placeholders > 1 ? "s" : ""} de paragraphe a pointer.`);
+  }
+
+  const blank = groups.filter((group) => !group.justification).length;
+  if (blank) {
+    lines.push(
+      `- ${blank} justification${blank > 1 ? "s" : ""} a rediger, sans bloc type memorise.`,
+    );
+  }
+
   lines.push("");
   lines.push(
     "> Les paragraphes cites ne sont pas deduits : ils dependent du contenu du " +
@@ -169,6 +187,13 @@ export function renderCoversheetMarkdown(coversheet: Coversheet): string {
   );
 
   return lines.join("\n");
+}
+
+/** Nombre de reperes de paragraphe restant a pointer dans une coversheet. */
+export function remainingPlaceholders(coversheet: Coversheet): number {
+  return countPlaceholders(
+    coversheet.groups.map((group) => group.justification ?? "").join(" "),
+  );
 }
 
 /** Rappel des moyens de conformite retenus, pour l'interface. */

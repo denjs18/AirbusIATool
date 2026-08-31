@@ -3,12 +3,12 @@
 /**
  * Module 2 : preparation d'une coversheet.
  *
- * Deroule le processus reel : on choisit les exigences a couvrir, on designe le
- * document de certification qui les traite, et l'outil monte la coversheet en
- * reprenant les regroupements des coversheets precedentes.
+ * On choisit les exigences a couvrir, on designe le document de certification,
+ * et l'outil restitue la redaction deja memorisee pour chaque combinaison
+ * d'exigences. Il ne reste qu'a pointer les paragraphes du document joint.
  *
- * Ce qui reste a completer est explicitement liste : l'outil ne sait pas ou
- * pointer dans le document joint.
+ * Le texte n'est jamais invente : il vient de la bibliotheque de blocs types,
+ * renseignee dans l'onglet Parametres.
  */
 import { useEffect, useMemo, useState } from "react";
 import PlanRequired from "./plan-required";
@@ -16,41 +16,26 @@ import { Button, Card, Empty, Metric } from "../ui";
 import {
   buildCoversheet,
   formatRequirementCitation,
+  remainingPlaceholders,
   renderCoversheetMarkdown,
   TO_BE_COMPLETED,
 } from "@/lib/coversheet";
 import { downloadText, safeFileName } from "@/lib/download";
-import {
-  applyGrouping,
-  EMPTY_MEMORY,
-  isGroupingMemory,
-  learnFromGroups,
-  mergeMemory,
-  type GroupingMemory,
-} from "@/lib/grouping";
+import { loadLibrary, saveLibrary } from "@/lib/library-storage";
 import { dedupeRequirements, extractOccurrencesFromPage } from "@/lib/requirements";
-import type { ParsedPlan, RequirementGroup, RequirementRef } from "@/lib/types";
-
-const MEMORY_KEY = "airbus-ia-tool.grouping-memory";
-
-/** La memoire ne quitte pas le poste : elle vit dans le navigateur. */
-function loadMemory(): GroupingMemory {
-  try {
-    const raw = window.localStorage.getItem(MEMORY_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    return isGroupingMemory(parsed) ? parsed : EMPTY_MEMORY;
-  } catch {
-    return EMPTY_MEMORY;
-  }
-}
-
-function saveMemory(memory: GroupingMemory) {
-  try {
-    window.localStorage.setItem(MEMORY_KEY, JSON.stringify(memory));
-  } catch {
-    // Navigation privee ou stockage refuse : la memoire reste en session.
-  }
-}
+import {
+  applyTemplates,
+  countPlaceholders,
+  findTemplate,
+  documentTypesOf,
+  EMPTY_LIBRARY,
+  knownRequirementsFor,
+  learnFromBlocks,
+  mergeTemplates,
+  type AppliedBlock,
+  type TemplateLibrary,
+} from "@/lib/templates";
+import type { ParsedPlan, RequirementRef } from "@/lib/types";
 
 export default function CoversheetsPanel({
   plan,
@@ -61,25 +46,32 @@ export default function CoversheetsPanel({
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [pasted, setPasted] = useState("");
-  const [documentType, setDocumentType] = useState("SSA");
+  const [documentType, setDocumentType] = useState("");
   const [documentRef, setDocumentRef] = useState("");
   const [documentIssue, setDocumentIssue] = useState("");
   const [documentTitle, setDocumentTitle] = useState("");
-  const [moc, setMoc] = useState("3");
-  const [memory, setMemory] = useState<GroupingMemory>(EMPTY_MEMORY);
-  /** Regroupement force par le redacteur, qui prime sur la memoire. */
-  const [manualGroups, setManualGroups] = useState<string[][]>();
+  const [moc, setMoc] = useState("");
+  const [library, setLibrary] = useState<TemplateLibrary>(EMPTY_LIBRARY);
+  const [manual, setManual] = useState<string[][]>();
   const [picked, setPicked] = useState<string[]>([]);
 
-  useEffect(() => setMemory(loadMemory()), []);
+  useEffect(() => {
+    const loaded = loadLibrary();
+    setLibrary(loaded);
+    const types = documentTypesOf(loaded);
+    if (types.length) setDocumentType((current) => current || types[0]);
+  }, []);
 
-  /** Exigences disponibles : celles du plan, ou celles collees a la main. */
   const available: RequirementRef[] = useMemo(() => {
-    if (pasted.trim()) {
-      return dedupeRequirements(extractOccurrencesFromPage(pasted, 1));
-    }
+    if (pasted.trim()) return dedupeRequirements(extractOccurrencesFromPage(pasted, 1));
     return plan?.requirements ?? [];
   }, [pasted, plan]);
+
+  /** Exigences que cette famille de coversheet sait deja traiter. */
+  const known = useMemo(
+    () => new Set(knownRequirementsFor(library, documentType)),
+    [library, documentType],
+  );
 
   const chosen = useMemo(
     () => available.filter((requirement) => selected.includes(requirement.id)),
@@ -95,32 +87,42 @@ export default function CoversheetsPanel({
     [moc],
   );
 
-  const auto = useMemo(
-    () => applyGrouping(documentType, chosen, memory),
-    [documentType, chosen, memory],
+  const match = useMemo(
+    () => applyTemplates(documentType, chosen, library),
+    [documentType, chosen, library],
   );
 
-  const groups: RequirementGroup[] = useMemo(() => {
-    if (!manualGroups) return auto.groups;
+  const blocks: AppliedBlock[] = useMemo(() => {
+    if (!manual) return match.blocks;
+
     const byId = new Map(chosen.map((requirement) => [requirement.id, requirement]));
-    const assembled = manualGroups
+    // Un bloc constitue a la main peut retomber sur une combinaison connue :
+    // dans ce cas la redaction memorisee revient d'elle-meme.
+    const toBlock = (requirements: RequirementRef[]): AppliedBlock => {
+      const template = findTemplate(
+        library,
+        documentType,
+        requirements.map((requirement) => requirement.id),
+      );
+      return { requirements, mocIds: [], justification: template?.text, template };
+    };
+
+    const assembled = manual
       .map((ids) => ids.map((id) => byId.get(id)).filter(Boolean) as RequirementRef[])
       .filter((requirements) => requirements.length > 0)
-      .map((requirements) => ({ requirements, mocIds: [] }));
-    // Une exigence cochee apres coup n'appartient encore a aucun bloc force.
-    const covered = new Set(assembled.flatMap((g) => g.requirements.map((r) => r.id)));
+      .map(toBlock);
+
+    const covered = new Set(assembled.flatMap((b) => b.requirements.map((r) => r.id)));
     for (const requirement of chosen) {
-      if (!covered.has(requirement.id)) {
-        assembled.push({ requirements: [requirement], mocIds: [] });
-      }
+      if (!covered.has(requirement.id)) assembled.push(toBlock([requirement]));
     }
     return assembled;
-  }, [manualGroups, auto.groups, chosen]);
+  }, [manual, match.blocks, chosen, library, documentType]);
 
   const coversheet = useMemo(
     () =>
-      buildCoversheet(groups, {
-        documentType,
+      buildCoversheet(blocks, {
+        documentType: documentType || TO_BE_COMPLETED,
         enclosed: [
           {
             ref: documentRef.trim() || TO_BE_COMPLETED,
@@ -132,7 +134,7 @@ export default function CoversheetsPanel({
         programme: plan?.header.programme,
         ataChapter: plan?.header.ataChapter,
       }),
-    [groups, documentType, documentRef, documentIssue, documentTitle, mocIds, plan],
+    [blocks, documentType, documentRef, documentIssue, documentTitle, mocIds, plan],
   );
 
   if (!plan && !pasted.trim()) {
@@ -158,22 +160,69 @@ export default function CoversheetsPanel({
   }
 
   const markdown = renderCoversheetMarkdown(coversheet);
-  const togglePicked = (id: string) =>
-    setPicked((current) =>
-      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
-    );
+  const withText = blocks.filter((block) => block.justification).length;
+  const placeholders = remainingPlaceholders(coversheet);
 
   return (
     <div className="flex flex-col gap-5">
       <Card
-        title="1. Exigences a couvrir"
-        subtitle="Celles que le tableau de l'ACP rattache au document de certification."
+        title="1. Document de certification"
+        subtitle="La coversheet porte sur ce document. Sa famille determine les blocs types applicables."
+      >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Famille</span>
+            <input
+              value={documentType}
+              onChange={(event) => setDocumentType(event.target.value)}
+              list="familles-coversheet"
+              placeholder="SyDMP"
+              className="rounded-md border px-2 py-1 font-mono text-xs"
+              style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+            />
+            <datalist id="familles-coversheet">
+              {documentTypesOf(library).map((type) => (
+                <option key={type} value={type} />
+              ))}
+            </datalist>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {known.size
+                ? `${known.size} exigence${known.size > 1 ? "s" : ""} connue${known.size > 1 ? "s" : ""} pour cette famille`
+                : "Aucun bloc type pour cette famille (onglet Parametres)"}
+            </span>
+          </label>
+          <Field label="Reference" value={documentRef} onChange={setDocumentRef} mono
+                 placeholder={TO_BE_COMPLETED} />
+          <Field label="Issue" value={documentIssue} onChange={setDocumentIssue} mono />
+          <Field label="Titre" value={documentTitle} onChange={setDocumentTitle} />
+          <Field label="Moyens de conformite" value={moc} onChange={setMoc} mono
+                 hint="ex. 3, ou 4 6, ou S" />
+        </div>
+      </Card>
+
+      <Card
+        title="2. Exigences a couvrir"
+        subtitle="Celles que le tableau de l'ACP rattache a ce document."
         actions={
           <>
-            <Button variant="secondary" onClick={() => setSelected(available.map((r) => r.id))}>
-              Tout selectionner
-            </Button>
-            <Button variant="secondary" onClick={() => { setSelected([]); setManualGroups(undefined); }}>
+            {known.size > 0 && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setManual(undefined);
+                  setSelected(available.filter((r) => known.has(r.id)).map((r) => r.id));
+                }}
+              >
+                Selectionner les exigences connues
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setManual(undefined);
+                setSelected([]);
+              }}
+            >
               Vider
             </Button>
           </>
@@ -191,7 +240,7 @@ export default function CoversheetsPanel({
                     className="mt-1"
                     checked={selected.includes(requirement.id)}
                     onChange={() => {
-                      setManualGroups(undefined);
+                      setManual(undefined);
                       setSelected((current) =>
                         current.includes(requirement.id)
                           ? current.filter((id) => id !== requirement.id)
@@ -202,45 +251,32 @@ export default function CoversheetsPanel({
                   <span className="font-mono text-xs">
                     {formatRequirementCitation(requirement)}
                   </span>
+                  {known.has(requirement.id) && (
+                    <span className="rounded bg-ok-100 px-1.5 text-[10px] font-semibold text-ok-500 uppercase">
+                      connue
+                    </span>
+                  )}
                 </label>
               </li>
             ))}
           </ul>
         )}
-        <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
-          {chosen.length} exigence{chosen.length > 1 ? "s" : ""} selectionnee
-          {chosen.length > 1 ? "s" : ""}.
-        </p>
       </Card>
 
       <Card
-        title="2. Document de certification"
-        subtitle="La coversheet porte sur ce document, et couvre toutes les exigences selectionnees."
-      >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Famille" value={documentType} onChange={setDocumentType} mono
-                 hint="SSA, SyDAS, VVS, SyDMP... sert de cle aux regroupements" />
-          <Field label="Reference" value={documentRef} onChange={setDocumentRef} mono
-                 placeholder={TO_BE_COMPLETED} />
-          <Field label="Issue" value={documentIssue} onChange={setDocumentIssue} mono />
-          <Field label="Titre" value={documentTitle} onChange={setDocumentTitle} />
-          <Field label="Moyens de conformite" value={moc} onChange={setMoc} mono
-                 hint="ex. 3, ou 4 6, ou S" />
-        </div>
-      </Card>
-
-      <Card
-        title={`3. Blocs de justification (${groups.length})`}
-        subtitle="Un bloc par justification a rediger. Les regroupements connus sont rejoues automatiquement."
+        title={`3. Blocs de justification (${blocks.length})`}
+        subtitle="La redaction memorisee est restituee ; il reste a pointer les paragraphes."
         actions={
           <>
             <Button
               variant="secondary"
               disabled={picked.length < 2}
               onClick={() => {
-                setManualGroups(() => {
-                  const rest = groups
-                    .map((group) => group.requirements.map((r) => r.id).filter((id) => !picked.includes(id)))
+                setManual(() => {
+                  const rest = blocks
+                    .map((block) =>
+                      block.requirements.map((r) => r.id).filter((id) => !picked.includes(id)),
+                    )
                     .filter((ids) => ids.length > 0);
                   return [picked, ...rest];
                 });
@@ -251,116 +287,131 @@ export default function CoversheetsPanel({
             </Button>
             <Button
               variant="secondary"
-              disabled={!chosen.length}
+              disabled={!blocks.length}
               onClick={() => {
-                const rules = learnFromGroups(documentType, groups, documentRef || undefined);
-                const next = mergeMemory(memory, rules);
-                setMemory(next);
-                saveMemory(next);
+                const next = mergeTemplates(
+                  library,
+                  learnFromBlocks(documentType, blocks, documentRef || undefined),
+                );
+                setLibrary(next);
+                saveLibrary(next);
               }}
             >
-              Memoriser ces regroupements
+              Enregistrer comme blocs types
             </Button>
           </>
         }
       >
-        {groups.length === 0 ? (
+        {blocks.length === 0 ? (
           <Empty>Selectionnez au moins une exigence.</Empty>
         ) : (
           <ul className="flex flex-col gap-2">
-            {groups.map((group, index) => (
-              <li
-                key={group.requirements.map((r) => r.id).join("|")}
-                className="rounded-md border p-3"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-medium">Bloc {index + 1}</span>
-                  {group.requirements.length > 1 && (
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        setManualGroups(
-                          groups.flatMap((candidate) =>
-                            candidate === group
-                              ? candidate.requirements.map((r) => [r.id])
-                              : [candidate.requirements.map((r) => r.id)],
-                          ),
-                        )
-                      }
-                    >
-                      Separer
-                    </Button>
-                  )}
-                </div>
-                <ul className="mt-2 flex flex-col gap-1">
-                  {group.requirements.map((requirement) => (
-                    <li key={requirement.id}>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={picked.includes(requirement.id)}
-                          onChange={() => togglePicked(requirement.id)}
-                        />
-                        <span className="font-mono text-xs">
-                          {formatRequirementCitation(requirement)}
+            {blocks.map((block, index) => {
+              const justification = block.justification;
+              return (
+                <li
+                  key={block.requirements.map((r) => r.id).join("|")}
+                  className="rounded-md border p-3"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium">
+                      Bloc {index + 1}
+                      {justification ? (
+                        <span className="ml-2 rounded bg-ok-100 px-1.5 py-0.5 text-[10px] font-semibold text-ok-500 uppercase">
+                          redaction restituee
                         </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
+                      ) : (
+                        <span className="ml-2 rounded bg-warn-100 px-1.5 py-0.5 text-[10px] font-semibold text-warn-500 uppercase">
+                          a rediger
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex gap-2">
+                      {block.requirements.length > 1 && (
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            setManual(
+                              blocks.flatMap((candidate) =>
+                                candidate === block
+                                  ? candidate.requirements.map((r) => [r.id])
+                                  : [candidate.requirements.map((r) => r.id)],
+                              ),
+                            )
+                          }
+                        >
+                          Separer
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {block.requirements.map((requirement) => (
+                      <li key={requirement.id}>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={picked.includes(requirement.id)}
+                            onChange={() =>
+                              setPicked((current) =>
+                                current.includes(requirement.id)
+                                  ? current.filter((id) => id !== requirement.id)
+                                  : [...current, requirement.id],
+                              )
+                            }
+                          />
+                          <span className="font-mono text-xs">
+                            {formatRequirementCitation(requirement)}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {justification ? (
+                    <>
+                      <pre
+                        className="mt-2 max-h-48 overflow-y-auto rounded border p-2 text-[11px] leading-relaxed whitespace-pre-wrap"
+                        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+                      >
+                        {justification}
+                      </pre>
+                      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                        {countPlaceholders(justification)} repere
+                        {countPlaceholders(justification) > 1 ? "s" : ""} de paragraphe a pointer
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+                      Aucun bloc type memorise pour cette combinaison. Renseignez-le dans
+                      l&apos;onglet Parametres pour qu&apos;il soit restitue la prochaine fois.
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
 
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Metric label="Blocs" value={groups.length} />
+          <Metric label="Blocs" value={blocks.length} />
           <Metric
-            label="Regroupements rejoues"
-            value={auto.applied.length}
-            tone={auto.applied.length ? "ok" : "info"}
+            label="Redactions restituees"
+            value={withText}
+            tone={withText ? "ok" : "info"}
           />
-          <Metric label="Regles en memoire" value={memory.rules.length} />
-          <Metric label="Justifications a rediger" value={groups.length} tone="warning" />
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={() =>
-              downloadText(
-                safeFileName("regroupements", "json"),
-                JSON.stringify(memory, null, 2),
-                "application/json",
-              )
-            }
-          >
-            Exporter la memoire
-          </Button>
-          <label className="cursor-pointer rounded-md border px-3 py-1.5 text-sm"
-                 style={{ borderColor: "var(--border)" }}>
-            Importer une memoire
-            <input
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={async (event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (!file) return;
-                try {
-                  const parsed: unknown = JSON.parse(await file.text());
-                  if (!isGroupingMemory(parsed)) return;
-                  const next = mergeMemory(memory, parsed.rules);
-                  setMemory(next);
-                  saveMemory(next);
-                } catch {
-                  // Fichier illisible : la memoire courante reste en place.
-                }
-              }}
-            />
-          </label>
+          <Metric
+            label="A rediger"
+            value={blocks.length - withText}
+            tone={blocks.length - withText ? "warning" : "ok"}
+          />
+          <Metric
+            label="Reperes a pointer"
+            value={placeholders}
+            tone={placeholders ? "warning" : "ok"}
+          />
         </div>
       </Card>
 
@@ -368,10 +419,10 @@ export default function CoversheetsPanel({
         title="4. Trame de la coversheet"
         actions={
           <Button
-            disabled={!chosen.length}
+            disabled={!blocks.length}
             onClick={() =>
               downloadText(
-                safeFileName(`coversheet-${documentRef || documentType}`, "md"),
+                safeFileName(`coversheet-${documentRef || documentType || "sans-ref"}`, "md"),
                 markdown,
                 "text/markdown",
               )
@@ -381,7 +432,7 @@ export default function CoversheetsPanel({
           </Button>
         }
       >
-        {chosen.length === 0 ? (
+        {blocks.length === 0 ? (
           <Empty>La trame apparait des qu&apos;une exigence est selectionnee.</Empty>
         ) : (
           <pre

@@ -15,6 +15,7 @@ export const DEMO_FILES = {
   substantiation: "/fixtures/DOC-27-SAF-0142_Iss2.pdf",
   coversheet: "/fixtures/CVS-27-FCS-0001_Iss2.pdf",
   registry: "/fixtures/coversheets-registry.json",
+  templates: "/fixtures/blocs-types.json",
 } as const;
 
 /** Charge un PDF fictif servi par l'application et en extrait le texte. */

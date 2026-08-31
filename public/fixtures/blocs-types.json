@@ -1,0 +1,48 @@
+{
+  "_avertissement": "Donnees fictives. Redactions inventees pour la demonstration, aucun contenu de programme.",
+  "templates": [
+    {
+      "documentType": "SYDMP",
+      "requirementIds": [
+        "CS 25.671(a)",
+        "JAR 25.1301(a)"
+      ],
+      "text": "The enclosed SyDMP is the master plan describing the development assurance\nactivities to be performed for the change requests listed in §x.x, which are\nconsidered in the current certification projects.\n\nThe SyDMP references in §x.x the other plans describing the activities to be\nperformed, and provides in §x.x the list of applicable rules and the\ndevelopment assurance referential.",
+      "source": "CVS-SYDMP fictive issue 1"
+    },
+    {
+      "documentType": "SYDMP",
+      "requirementIds": [
+        "CS 25.671(a)"
+      ],
+      "text": "The enclosed SyDMP describes in §x.x the development assurance activities\napplicable to this requirement, and justifies in §x.x the deviations to the\napplicable processes.",
+      "source": "CVS-SYDMP fictive issue 1"
+    },
+    {
+      "documentType": "SSA",
+      "requirementIds": [
+        "CS 25.671(c)(1)",
+        "CS 25.1309(b)"
+      ],
+      "text": "Combinations of failures have been classified in §x.x, and adequate failure\nprobabilities are demonstrated in §x.x.\n\nIn addition, the safety assessment shows in §x.x that the aeroplane is capable\nof safe flight and landing after any single failure, and after any combination\nof failures not shown to be extremely improbable.",
+      "source": "CVS-SSA fictive issue 4"
+    },
+    {
+      "documentType": "SSA",
+      "requirementIds": [
+        "CS 25.672"
+      ],
+      "text": "Chapter §x.x of the safety assessment provides the list of alerting and\ndemonstrates the adequate level of probability.",
+      "source": "CVS-SSA fictive issue 4"
+    },
+    {
+      "documentType": "VVS",
+      "requirementIds": [
+        "CS 25.143",
+        "CS 25.671"
+      ],
+      "text": "The enclosed verification summary shows compliance to the requirements quoted\nabove by stating the correctness of the laboratory tests (§x.x) and the good\nfunctioning in flight test (§x.x).",
+      "source": "CVS-VVS fictive issue 2"
+    }
+  ]
+}
