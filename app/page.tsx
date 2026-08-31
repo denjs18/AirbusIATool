@@ -18,10 +18,11 @@ export default function Home() {
           Outillage des taches de certification ATA 27
         </h1>
         <p className="max-w-3xl text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-          Cinq automatisations pour decharger les equipes des taches chronophages a faible valeur
-          ajoutee : structurer l&apos;information des documents volumineux, preparer les trames,
-          verifier les renvois, controler les en-tetes et recouper les perimetres. La redaction
-          technique reste integralement a la main des ingenieurs de certification.
+          Quatre automatisations pour decharger les equipes des taches chronophages a faible
+          valeur ajoutee : structurer l&apos;information des documents volumineux, preparer les
+          coversheets a partir des exigences a couvrir, verifier les renvois et recouper les
+          perimetres. La redaction technique reste integralement a la main des ingenieurs de
+          certification.
         </p>
       </header>
 

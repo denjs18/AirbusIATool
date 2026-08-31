@@ -1,216 +1,177 @@
 /**
- * Preparation des trames de coversheet a partir des exigences citees dans l'ACP.
+ * Preparation d'une coversheet de document de certification.
  *
- * Principe directeur : l'outil met en place la structure, pre-remplit ce qui est
- * mecaniquement deductible et laisse explicitement vides les champs qui relevent
- * du jugement d'ingenierie. Les zones a rediger sont balisees "[A REDIGER]" pour
- * qu'aucune trame ne puisse etre emise par inadvertance en l'etat.
+ * Une coversheet accompagne un document de certification et rassemble toutes
+ * les exigences que ce document traite. Chaque bloc du Compliance Statement
+ * cite une ou plusieurs exigences, puis explique comment le document joint y
+ * repond, en renvoyant a ses chapitres.
+ *
+ * Ce que l'outil sait faire : monter la structure, formater les references,
+ * reprendre les regroupements des coversheets precedentes, rappeler les MoC.
+ *
+ * Ce que l'outil ne sait pas et n'invente pas : ou pointer dans le document
+ * joint. Les paragraphes cites relevent de la lecture du document par
+ * l'ingenieur, et restent donc a completer.
  */
-import { expectedEvidenceFor, MOC_DEFINITIONS, suggestMocForRequirement } from "./moc";
+import { describeMoc } from "./moc";
 import type {
   Coversheet,
   DocumentHeader,
+  EnclosedDocument,
   MocId,
-  ParsedPlan,
-  RequirementOccurrence,
+  RequirementGroup,
   RequirementRef,
 } from "./types";
 
-export const TO_BE_WRITTEN = "[A REDIGER]";
-
-export interface TemplateOptions {
-  /** Programme avion. Repris de l'ACP si absent. */
-  programme?: string;
-  /** Chapitre ATA, ex. "27". */
-  ataChapter?: string;
-  /** Redacteur pressenti, pre-rempli dans l'en-tete. */
-  author?: string;
-  /** Prefixe des references de coversheet generees, ex. "CVS-27-FCS". */
-  refPrefix?: string;
-  /** Premier numero de la serie. */
-  refStart?: number;
-  /** Date d'emission au format ISO. Injectable pour rendre les tests stables. */
-  issueDate?: string;
-  /** Mention de classification a reporter dans l'en-tete. */
-  classification?: string;
-}
-
-const DEFAULTS: Required<Pick<TemplateOptions, "refPrefix" | "refStart" | "classification">> = {
-  refPrefix: "CVS-27-FCS",
-  refStart: 1,
-  classification: "Airbus Protect - donnees fictives (POC)",
-};
-
-/** Reference de coversheet de la serie, ex. CVS-27-FCS-0003. */
-export function coversheetRef(prefix: string, index: number): string {
-  return `${prefix}-${String(index).padStart(4, "0")}`;
-}
-
 /**
- * Construit une trame pour une exigence.
- * Les MoC proviennent de l'ACP quand il les precise, sinon d'une proposition
- * par defaut clairement identifiee comme telle dans le rendu.
+ * Marqueur des zones a completer.
+ *
+ * En francais dans un document redige en anglais : il doit sauter aux yeux
+ * pour qu'une trame ne parte jamais en revue avec ses trous.
  */
-export function buildCoversheet(
-  requirement: RequirementRef,
-  occurrences: RequirementOccurrence[],
-  planHeader: DocumentHeader,
-  options: TemplateOptions = {},
-  index = 1,
-): Coversheet {
-  const prefix = options.refPrefix ?? DEFAULTS.refPrefix;
-  const mocFromPlan = [
-    ...new Set(occurrences.flatMap((occurrence) => occurrence.mocIds)),
-  ].sort() as MocId[];
-  const mocIds = mocFromPlan.length ? mocFromPlan : suggestMocForRequirement(requirement.id);
+export const TO_BE_COMPLETED = "[A COMPLETER]";
 
+export interface CoversheetOptions {
+  /** Famille du document, ex. "SSA", "SyDAS", "VVS". */
+  documentType: string;
+  /** Document(s) joint(s). Un seul dans la plupart des cas. */
+  enclosed: EnclosedDocument[];
+  /** Moyens de conformite du document. */
+  mocIds: MocId[];
+  programme?: string;
+  ataChapter?: string;
+  /** Reference propre de la coversheet. */
+  ref?: string;
+  issue?: string;
+  /** Date d'emission. Injectable pour rendre les tests stables. */
+  date?: string;
+  author?: string;
+}
+
+/** Assemble la coversheet a partir des blocs deja constitues. */
+export function buildCoversheet(
+  groups: RequirementGroup[],
+  options: CoversheetOptions,
+): Coversheet {
   const header: DocumentHeader = {
-    documentRef: coversheetRef(prefix, (options.refStart ?? DEFAULTS.refStart) + index - 1),
-    title: `Compliance coversheet - ${requirement.id}`,
-    issue: "1",
-    date: options.issueDate ?? new Date().toISOString().slice(0, 10),
-    ataChapter: options.ataChapter ?? planHeader.ataChapter ?? "27",
-    programme: options.programme ?? planHeader.programme ?? TO_BE_WRITTEN,
-    requirementRef: requirement.qualifier
-      ? `${requirement.id} (${requirement.qualifier})`
-      : requirement.id,
-    moc: mocIds.map((id) => `MoC ${id}`).join(", "),
-    author: options.author ?? TO_BE_WRITTEN,
-    checker: TO_BE_WRITTEN,
-    approver: TO_BE_WRITTEN,
-    classification: options.classification ?? DEFAULTS.classification,
+    documentRef: options.ref ?? TO_BE_COMPLETED,
+    title: `Compliance coversheet - ${options.documentType}`,
+    issue: options.issue ?? "1",
+    date: options.date ?? new Date().toISOString().slice(0, 10),
+    ataChapter: options.ataChapter,
+    programme: options.programme,
+    moc: options.mocIds.map((id) => `MoC ${id}`).join(", "),
+    author: options.author,
   };
 
   return {
-    requirement,
+    documentType: options.documentType,
+    enclosed: options.enclosed,
+    mocIds: options.mocIds,
+    // Les MoC d'un bloc valent ceux du document tant que le redacteur n'en
+    // decide pas autrement : certaines coversheets les precisent bloc par bloc.
+    groups: groups.map((group) => ({
+      ...group,
+      mocIds: group.mocIds.length ? group.mocIds : options.mocIds,
+    })),
     header,
-    mocIds,
-    // Les renvois vers les documents de substantiation restent a etablir :
-    // c'est une decision d'ingenierie, pas une deduction mecanique.
-    citations: [],
-    complianceStatement: undefined,
   };
 }
 
-/** Genere une trame par exigence du plan, dans l'ordre de tri du plan. */
-export function buildCoversheetsFromPlan(
-  plan: ParsedPlan,
-  options: TemplateOptions = {},
-): Coversheet[] {
-  return plan.requirements.map((requirement, position) =>
-    buildCoversheet(
-      requirement,
-      plan.occurrences.filter((occurrence) => occurrence.id === requirement.id),
-      plan.header,
-      options,
-      position + 1,
-    ),
-  );
+/** Reference d'exigence telle qu'elle est citee dans une coversheet. */
+export function formatRequirementCitation(requirement: RequirementRef): string {
+  const appendices = requirement.appendices?.length
+    ? ` Appendix ${requirement.appendices.join(" & ")}`
+    : "";
+  const qualifier = requirement.qualifier ? ` ${requirement.qualifier}` : "";
+  return `${requirement.id}${qualifier}${appendices}`;
+}
+
+/** Ligne d'exigences d'un bloc, telle qu'elle apparait apres la puce. */
+export function formatGroupHeading(group: RequirementGroup): string {
+  return group.requirements.map(formatRequirementCitation).join(", ");
 }
 
 const HEADER_ROWS: [keyof DocumentHeader, string][] = [
-  ["documentRef", "Reference document"],
-  ["title", "Titre"],
+  ["documentRef", "Coversheet reference"],
   ["issue", "Issue"],
   ["date", "Date"],
   ["programme", "Programme"],
   ["ataChapter", "ATA"],
-  ["requirementRef", "Exigence"],
-  ["moc", "Moyens de conformite"],
-  ["author", "Redige par"],
-  ["checker", "Verifie par"],
-  ["approver", "Approuve par"],
-  ["classification", "Classification"],
+  ["moc", "Means of compliance"],
+  ["author", "Prepared by"],
 ];
 
 /**
- * Rendu Markdown de la trame, directement collable dans le gabarit Word.
- * Le format Markdown est volontaire : il reste lisible, diffable et
- * convertible, sans dependance a un format binaire.
+ * Rendu Markdown de la coversheet, calque sur la structure des coversheets
+ * existantes : en-tete, Compliance Statement, puis un bloc par groupe.
  */
-export function renderCoversheetMarkdown(
-  coversheet: Coversheet,
-  planSource?: string,
-): string {
-  const { header, requirement, mocIds } = coversheet;
+export function renderCoversheetMarkdown(coversheet: Coversheet): string {
   const lines: string[] = [];
+  const { header, enclosed, groups, mocIds, documentType } = coversheet;
 
-  lines.push(`# Compliance coversheet - ${requirement.id}`, "");
-  lines.push("## En-tete", "");
-  lines.push("| Champ | Valeur |", "| --- | --- |");
+  lines.push(`# Compliance coversheet - ${documentType}`, "");
+
+  lines.push("| Field | Value |", "| --- | --- |");
   for (const [key, label] of HEADER_ROWS) {
-    lines.push(`| ${label} | ${header[key] ?? TO_BE_WRITTEN} |`);
+    lines.push(`| ${label} | ${header[key] ?? TO_BE_COMPLETED} |`);
   }
   lines.push("");
 
-  lines.push("## 1. Objet", "");
-  lines.push(
-    `Demonstration de conformite a l'exigence ${requirement.id}` +
-      (requirement.qualifier ? ` (${requirement.qualifier})` : "") +
-      ".",
-    "",
-  );
-
-  lines.push("## 2. Exigence applicable", "");
-  lines.push(`- Reference : ${requirement.id}`);
-  lines.push(`- Nature : ${requirement.kind}`);
-  if (requirement.qualifier) lines.push(`- Amendement : ${requirement.qualifier}`);
-  lines.push(`- Texte de l'exigence : ${TO_BE_WRITTEN} (reporter l'enonce depuis le referentiel)`);
-  lines.push("");
-
-  lines.push("## 3. Moyens de conformite retenus", "");
-  lines.push("| Code | Libelle | Retenu |", "| --- | --- | --- |");
-  for (const code of mocIds) {
-    lines.push(`| ${code} | ${MOC_DEFINITIONS[code]?.labelFr ?? "-"} | X |`);
+  lines.push("## Enclosed document(s)", "");
+  lines.push("| Reference | Issue | Title |", "| --- | --- | --- |");
+  for (const document of enclosed) {
+    lines.push(
+      `| ${document.ref} | ${document.issue ?? TO_BE_COMPLETED} | ${document.title ?? TO_BE_COMPLETED} |`,
+    );
   }
   lines.push("");
 
-  lines.push("## 4. Documents de substantiation", "");
+  lines.push("## Compliance Statement", "");
   lines.push(
-    "| Type attendu | Reference | Issue | Chapitre | Titre du chapitre |",
-    "| --- | --- | --- | --- | --- |",
+    `The enclosed document provides ${TO_BE_COMPLETED} (objet du document joint).`,
+    "",
   );
-  for (const evidence of expectedEvidenceFor(mocIds)) {
-    lines.push(`| ${evidence} | ${TO_BE_WRITTEN} | | | |`);
+  lines.push(
+    `This document is used as ${mocIds.map((id) => `Mean of Compliance n°${id}`).join(", ")} ` +
+      "for compliance demonstration with the following certification requirements:",
+    "",
+  );
+
+  groups.forEach((group, index) => {
+    lines.push(`### ${index + 1}. ${formatGroupHeading(group)}`, "");
+    if (group.mocIds.length && group.mocIds.join() !== mocIds.join()) {
+      lines.push(`- ${group.mocIds.map((id) => `MoC ${id}`).join(", ")}`, "");
+    }
+    lines.push(
+      `${TO_BE_COMPLETED} : en quoi le document joint repond a ` +
+        (group.requirements.length > 1
+          ? "ces exigences, en citant les paragraphes concernes."
+          : "cette exigence, en citant les paragraphes concernes."),
+      "",
+    );
+  });
+
+  lines.push("---", "");
+  lines.push("## Reste a completer", "");
+  lines.push(`- Objet du document joint.`);
+  for (const document of enclosed) {
+    if (!document.issue) lines.push(`- Issue du document ${document.ref}.`);
+    if (!document.title) lines.push(`- Titre du document ${document.ref}.`);
   }
+  lines.push(
+    `- ${groups.length} justification${groups.length > 1 ? "s" : ""}, avec les paragraphes cites.`,
+  );
   lines.push("");
   lines.push(
-    "> Les renvois saisis dans ce tableau sont controlables via le module " +
-      "Coherence des renvois (verification chapitre cite / contenu reel).",
-    "",
+    "> Les paragraphes cites ne sont pas deduits : ils dependent du contenu du " +
+      "document joint et relevent de sa lecture par l'ingenieur.",
   );
-
-  lines.push("## 5. Enonce de conformite", "");
-  lines.push(`${TO_BE_WRITTEN}`, "");
-  lines.push(
-    "> Champ volontairement laisse vide : la formulation de l'enonce de " +
-      "conformite releve de l'ingenieur de certification.",
-    "",
-  );
-
-  lines.push("## 6. Hypotheses et limitations", "");
-  lines.push(`${TO_BE_WRITTEN}`, "");
-
-  lines.push("## 7. Tracabilite de la generation", "");
-  if (planSource) lines.push(`- Plan source : ${planSource}`);
-  lines.push(`- Trame generee automatiquement, champs "${TO_BE_WRITTEN}" a completer.`);
-  lines.push("- Aucun contenu technique n'a ete produit par l'outil.");
 
   return lines.join("\n");
 }
 
-/** Index Markdown des trames generees, utile comme sommaire de lot. */
-export function renderCoversheetIndex(coversheets: Coversheet[]): string {
-  const lines = [
-    "# Trames de coversheets generees",
-    "",
-    "| Reference | Exigence | MoC |",
-    "| --- | --- | --- |",
-  ];
-  for (const coversheet of coversheets) {
-    lines.push(
-      `| ${coversheet.header.documentRef} | ${coversheet.requirement.id} | ${coversheet.mocIds.join(", ")} |`,
-    );
-  }
-  return lines.join("\n");
+/** Rappel des moyens de conformite retenus, pour l'interface. */
+export function describeMocList(mocIds: MocId[]): string {
+  return mocIds.map(describeMoc).join(" · ");
 }

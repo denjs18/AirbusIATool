@@ -1,154 +1,139 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCoversheet,
-  buildCoversheetsFromPlan,
-  coversheetRef,
-  renderCoversheetIndex,
+  formatGroupHeading,
+  formatRequirementCitation,
   renderCoversheetMarkdown,
-  TO_BE_WRITTEN,
+  TO_BE_COMPLETED,
 } from "../lib/coversheet";
-import { parsePlan } from "../lib/parse-acp";
-import type { PdfDocumentText } from "../lib/types";
+import { applyGrouping, EMPTY_MEMORY, mergeMemory } from "../lib/grouping";
+import { dedupeRequirements, extractOccurrencesFromPage } from "../lib/requirements";
 
-const PLAN: PdfDocumentText = {
-  sourceName: "ACP-fictif.pdf",
-  pageCount: 2,
-  pages: [
-    {
-      page: 1,
-      text: [
-        "Document reference: ACP-27-CER-0114",
-        "Title: Certification plan",
-        "Issue: 3",
-        "Date: 12/03/2026",
-        "ATA chapter: 27",
-        "Programme: A32N-DEMO",
-      ].join("\n"),
-    },
-    {
-      page: 2,
-      text: [
-        "2.1 Primary requirements",
-        "- CS 25.671 amdt 27 General, control systems. MoC: 1, 2, 3 and 6.",
-        "- CS 25.675 Stops. MoC: 1, 4.",
-        "- CS 25.703 Takeoff warning system.",
-      ].join("\n"),
-    },
+const SELECTION = dedupeRequirements(
+  extractOccurrencesFromPage(
+    "CS 25.0671(a) amdt. 23, JAR 25.1301(a) ch. 11, JAR 25.1309(b)(c)(d) CH 11",
+    1,
+  ),
+);
+
+const OPTIONS = {
+  documentType: "SSA",
+  enclosed: [
+    { ref: "DOC-SAF-0142", issue: "4", title: "Flight control system safety assessment" },
   ],
+  mocIds: ["3"],
+  programme: "PROG-DEMO",
+  ataChapter: "27",
+  ref: "CVS-SSA-001",
+  issue: "1",
+  date: "2026-08-31",
 };
 
-const OPTIONS = { issueDate: "2026-08-17", author: "D. Testeur" };
+const groupsOf = (rules: Parameters<typeof mergeMemory>[1] = []) =>
+  applyGrouping("SSA", SELECTION, mergeMemory(EMPTY_MEMORY, rules)).groups;
 
-describe("coversheetRef", () => {
-  it("numerote sur quatre chiffres", () => {
-    expect(coversheetRef("CVS-27-FCS", 3)).toBe("CVS-27-FCS-0003");
+describe("formatRequirementCitation", () => {
+  it("restitue l'exigence telle qu'elle se cite, avec son qualifieur", () => {
+    const [cs, jar] = SELECTION;
+    expect(formatRequirementCitation(cs)).toBe("CS 25.671(a) Amdt 23");
+    expect(formatRequirementCitation(jar)).toBe("JAR 25.1301(a) ch. 11");
+  });
+
+  it("reporte les appendices d'un CRI", () => {
+    const [cri] = dedupeRequirements(
+      extractOccurrencesFromPage("as interpreted by CRI F-28 Appendix 1 & 3", 1),
+    );
+    expect(formatRequirementCitation(cri)).toBe("CRI F-28 Appendix 1 & 3");
+  });
+});
+
+describe("formatGroupHeading", () => {
+  it("cite toutes les exigences d'un bloc sur une ligne", () => {
+    const groups = groupsOf([
+      { documentType: "SSA", requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"] },
+    ]);
+    expect(formatGroupHeading(groups[0])).toBe("CS 25.671(a) Amdt 23, JAR 25.1301(a) ch. 11");
   });
 });
 
 describe("buildCoversheet", () => {
-  const plan = parsePlan(PLAN);
+  it("produit une coversheet pour un document, pas pour une exigence", () => {
+    const coversheet = buildCoversheet(groupsOf(), OPTIONS);
+    expect(coversheet.documentType).toBe("SSA");
+    expect(coversheet.enclosed[0].ref).toBe("DOC-SAF-0142");
+    expect(coversheet.groups).toHaveLength(SELECTION.length);
+  });
 
-  it("reprend les MoC annonces dans le plan", () => {
-    const requirement = plan.requirements.find((r) => r.id === "CS 25.671")!;
+  it("rassemble les exigences groupees dans un meme bloc", () => {
     const coversheet = buildCoversheet(
-      requirement,
-      plan.occurrences.filter((o) => o.id === requirement.id),
-      plan.header,
+      groupsOf([{ documentType: "SSA", requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"] }]),
       OPTIONS,
     );
-    expect(coversheet.mocIds).toEqual(["1", "2", "3", "6"]);
-    expect(coversheet.header.moc).toBe("MoC 1, MoC 2, MoC 3, MoC 6");
+    expect(coversheet.groups).toHaveLength(2);
+    expect(coversheet.groups[0].requirements).toHaveLength(2);
   });
 
-  it("propose des MoC par defaut quand le plan n'en cite pas", () => {
-    const requirement = plan.requirements.find((r) => r.id === "CS 25.703")!;
-    const coversheet = buildCoversheet(requirement, [], plan.header, OPTIONS);
-    expect(coversheet.mocIds.length).toBeGreaterThan(0);
+  it("attribue les MoC du document aux blocs qui n'en portent pas", () => {
+    const coversheet = buildCoversheet(groupsOf(), OPTIONS);
+    expect(coversheet.groups.every((group) => group.mocIds.join() === "3")).toBe(true);
   });
 
-  it("herite du programme et de l'ATA du plan", () => {
-    const coversheet = buildCoversheet(plan.requirements[0], [], plan.header, OPTIONS);
-    expect(coversheet.header.programme).toBe("A32N-DEMO");
-    expect(coversheet.header.ataChapter).toBe("27");
+  it("conserve les MoC propres a un bloc quand ils sont precises", () => {
+    const groups = groupsOf();
+    groups[0].mocIds = ["4", "6"];
+    const coversheet = buildCoversheet(groups, OPTIONS);
+    expect(coversheet.groups[0].mocIds).toEqual(["4", "6"]);
   });
 
-  it("reporte l'amendement dans la reference d'exigence", () => {
-    const requirement = plan.requirements.find((r) => r.id === "CS 25.671")!;
-    const coversheet = buildCoversheet(requirement, [], plan.header, OPTIONS);
-    expect(coversheet.header.requirementRef).toBe("CS 25.671 (Amdt 27)");
+  it("ne remplit aucune justification", () => {
+    const coversheet = buildCoversheet(groupsOf(), OPTIONS);
+    expect(coversheet.groups.every((group) => group.justification === undefined)).toBe(true);
   });
 
-  it("laisse vides les champs qui relevent du jugement d'ingenierie", () => {
-    const coversheet = buildCoversheet(plan.requirements[0], [], plan.header, OPTIONS);
-    expect(coversheet.complianceStatement).toBeUndefined();
-    expect(coversheet.citations).toEqual([]);
-    expect(coversheet.header.checker).toBe(TO_BE_WRITTEN);
-    expect(coversheet.header.approver).toBe(TO_BE_WRITTEN);
-  });
-
-  it("est deterministe a options egales", () => {
-    const build = () => buildCoversheet(plan.requirements[0], [], plan.header, OPTIONS, 2);
-    expect(JSON.stringify(build())).toBe(JSON.stringify(build()));
-  });
-});
-
-describe("buildCoversheetsFromPlan", () => {
-  it("genere une trame par exigence, numerotee en sequence", () => {
-    const plan = parsePlan(PLAN);
-    const coversheets = buildCoversheetsFromPlan(plan, OPTIONS);
-
-    expect(coversheets).toHaveLength(plan.requirements.length);
-    expect(coversheets[0].header.documentRef).toBe("CVS-27-FCS-0001");
-    expect(coversheets[1].header.documentRef).toBe("CVS-27-FCS-0002");
+  it("est deterministe a entrees egales", () => {
+    const build = () => JSON.stringify(buildCoversheet(groupsOf(), OPTIONS));
+    expect(build()).toBe(build());
   });
 });
 
 describe("renderCoversheetMarkdown", () => {
-  const plan = parsePlan(PLAN);
-  const requirement = plan.requirements.find((r) => r.id === "CS 25.671")!;
   const markdown = renderCoversheetMarkdown(
     buildCoversheet(
-      requirement,
-      plan.occurrences.filter((o) => o.id === requirement.id),
-      plan.header,
+      groupsOf([{ documentType: "SSA", requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"] }]),
       OPTIONS,
     ),
-    plan.sourceName,
   );
 
-  it("produit les sept sections de la trame", () => {
-    for (const heading of [
-      "## 1. Objet",
-      "## 2. Exigence applicable",
-      "## 3. Moyens de conformite retenus",
-      "## 4. Documents de substantiation",
-      "## 5. Enonce de conformite",
-      "## 6. Hypotheses et limitations",
-      "## 7. Tracabilite de la generation",
-    ]) {
-      expect(markdown).toContain(heading);
-    }
+  it("reprend la structure d'une coversheet reelle", () => {
+    expect(markdown).toContain("# Compliance coversheet - SSA");
+    expect(markdown).toContain("## Enclosed document(s)");
+    expect(markdown).toContain("## Compliance Statement");
+    expect(markdown).toContain("Mean of Compliance n°3");
   });
 
-  it("liste les documents de substantiation attendus pour les MoC retenus", () => {
-    expect(markdown).toContain("Note de conception");
-    expect(markdown).toContain("FHA");
+  it("cite le document joint avec sa reference et son issue", () => {
+    expect(markdown).toContain("DOC-SAF-0142");
+    expect(markdown).toContain("Flight control system safety assessment");
   });
 
-  it("balise explicitement les champs a rediger", () => {
-    expect(markdown).toContain(TO_BE_WRITTEN);
-    expect(markdown).toContain("Aucun contenu technique n'a ete produit par l'outil.");
+  it("produit un bloc par groupe, exigences groupees sur une meme ligne", () => {
+    expect(markdown).toContain("### 1. CS 25.671(a) Amdt 23, JAR 25.1301(a) ch. 11");
+    expect(markdown).toContain("### 2. JAR 25.1309(b)(c)(d) ch. 11");
   });
 
-  it("trace le plan source", () => {
-    expect(markdown).toContain("ACP-fictif.pdf");
+  it("laisse chaque justification a completer", () => {
+    const blocs = markdown.split("### ").length - 1;
+    const aCompleter = markdown.split(TO_BE_COMPLETED).length - 1;
+    expect(blocs).toBe(2);
+    expect(aCompleter).toBeGreaterThanOrEqual(blocs);
   });
-});
 
-describe("renderCoversheetIndex", () => {
-  it("produit un sommaire tabulaire du lot", () => {
-    const index = renderCoversheetIndex(buildCoversheetsFromPlan(parsePlan(PLAN), OPTIONS));
-    expect(index).toContain("| Reference | Exigence | MoC |");
-    expect(index).toContain("CS 25.671");
+  it("recapitule ce qui reste a completer", () => {
+    expect(markdown).toContain("## Reste a completer");
+    expect(markdown).toContain("2 justifications");
+  });
+
+  it("dit explicitement que les paragraphes cites ne sont pas deduits", () => {
+    expect(markdown).toContain("ne sont pas deduits");
   });
 });

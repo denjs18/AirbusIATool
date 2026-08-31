@@ -9,15 +9,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { checkCitations, extractChapters, extractCitations } from "../lib/coherence";
-import { buildCoversheetsFromPlan, renderCoversheetMarkdown } from "../lib/coversheet";
 import { crossCheck } from "../lib/crosscheck";
-import { checkHeader, parseHeader } from "../lib/headers";
+import { parseHeader } from "../lib/headers";
 import { parsePlan, planStats } from "../lib/parse-acp";
-import { isRegistryFile, registryToCoversheets } from "../lib/registry";
+import { isRegistryFile, registryToCoverage } from "../lib/registry";
 import { extractPdfTextNode } from "./pdf-node";
 
 const FIXTURES = "public/fixtures";
-const TODAY = new Date(Date.UTC(2026, 7, 17));
 
 const acpText = await extractPdfTextNode(`${FIXTURES}/ACP-27-CER-0114_Iss3.pdf`);
 const safetyText = await extractPdfTextNode(`${FIXTURES}/DOC-27-SAF-0142_Iss2.pdf`);
@@ -31,15 +29,6 @@ describe("extraction du plan de certification", () => {
     expect(plan.header.issue).toBe("3");
     expect(plan.header.ataChapter).toBe("27");
     expect(plan.header.programme).toBe("A32N-DEMO");
-  });
-
-  it("valide l'en-tete du plan", () => {
-    const results = checkHeader(plan.header, {
-      expectedAta: "27",
-      allowedProgrammes: ["A32N-DEMO"],
-      today: TODAY,
-    });
-    expect(results.map((r) => r.status)).toEqual(["ok"]);
   });
 
   it("retrouve les exigences citees dans tout le document", () => {
@@ -84,31 +73,6 @@ describe("extraction du plan de certification", () => {
   });
 });
 
-describe("generation des trames de coversheet", () => {
-  const plan = parsePlan(acpText);
-  const coversheets = buildCoversheetsFromPlan(plan, {
-    issueDate: "2026-08-17",
-    author: "D. Testeur",
-  });
-
-  it("genere une trame par exigence du plan", () => {
-    expect(coversheets).toHaveLength(plan.requirements.length);
-  });
-
-  it("reprend les MoC du plan dans la trame", () => {
-    const sheet = coversheets.find((c) => c.requirement.id === "CS 25.671");
-    expect(sheet?.mocIds).toEqual(["1", "2", "3", "6"]);
-  });
-
-  it("rend une trame complete et tracable", () => {
-    const sheet = coversheets.find((c) => c.requirement.id === "CS 25.1309(b)")!;
-    const markdown = renderCoversheetMarkdown(sheet, plan.sourceName);
-    expect(markdown).toContain("Compliance coversheet - CS 25.1309(b)");
-    expect(markdown).toContain("ACP-27-CER-0114_Iss3.pdf");
-    expect(markdown).toContain("[A REDIGER]");
-  });
-});
-
 describe("coherence des renvois de la coversheet fictive", () => {
   const chapters = extractChapters(safetyText.pages);
   const citationText = coversheetText.pages.map((page) => page.text).join("\n");
@@ -150,27 +114,6 @@ describe("coherence des renvois de la coversheet fictive", () => {
   });
 });
 
-describe("controle de l'en-tete de la coversheet fictive", () => {
-  const header = parseHeader(coversheetText.pages[0].text);
-  const results = checkHeader(header, {
-    expectedAta: "27",
-    allowedProgrammes: ["A32N-DEMO"],
-    today: TODAY,
-  });
-
-  it("detecte le champ Programme absent (defaut volontaire)", () => {
-    expect(results.find((r) => r.id === "header.missing.programme")?.status).toBe("error");
-  });
-
-  it("detecte le redacteur egal a l'approbateur (defaut volontaire)", () => {
-    expect(results.find((r) => r.id === "header.roles.conflict")?.status).toBe("error");
-  });
-
-  it("detecte la date d'emission future (defaut volontaire)", () => {
-    expect(results.find((r) => r.id === "header.date.future")?.status).toBe("warning");
-  });
-});
-
 describe("recoupement ACP / registre de coversheets", () => {
   const plan = parsePlan(acpText);
   const registry = JSON.parse(readFileSync(`${FIXTURES}/coversheets-registry.json`, "utf8"));
@@ -179,7 +122,7 @@ describe("recoupement ACP / registre de coversheets", () => {
     expect(isRegistryFile(registry)).toBe(true);
   });
 
-  const report = crossCheck({ plan, coversheets: registryToCoversheets(registry) });
+  const report = crossCheck({ plan, coversheets: registryToCoverage(registry) });
 
   it("detecte CS 25.703 sans coversheet (defaut volontaire)", () => {
     expect(report.uncovered).toContain("CS 25.703");

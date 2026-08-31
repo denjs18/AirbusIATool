@@ -11,7 +11,7 @@ import {
   extractOccurrencesFromPage,
   formatRequirementId,
 } from "./requirements";
-import type { Coversheet, MocId, RequirementRef } from "./types";
+import type { CoverageRecord, MocId, RequirementRef } from "./types";
 
 export interface RegistryEntry {
   documentRef: string;
@@ -48,25 +48,16 @@ export function parseRequirementString(value: string): RequirementRef {
   };
 }
 
-export function registryToCoversheets(file: RegistryFile): Coversheet[] {
+export function registryToCoverage(file: RegistryFile): CoverageRecord[] {
   return file.coversheets.map((entry) => {
     const requirement = parseRequirementString(entry.requirement);
     const mocIds = (entry.moc ?? []).filter((code) => isKnownMoc(code));
 
     return {
       requirement: entry.qualifier ? { ...requirement, qualifier: entry.qualifier } : requirement,
-      header: {
-        documentRef: entry.documentRef,
-        issue: entry.issue ?? "1",
-        programme: file.programme,
-        ataChapter: file.ataChapter,
-        requirementRef: entry.qualifier
-          ? `${requirement.id} (${entry.qualifier})`
-          : requirement.id,
-        moc: mocIds.join(", "),
-      },
+      documentRef: entry.documentRef,
+      documentIssue: entry.issue,
       mocIds,
-      citations: [],
     };
   });
 }

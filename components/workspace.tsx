@@ -11,16 +11,14 @@ import { useState } from "react";
 import CoherencePanel from "./panels/coherence-panel";
 import CoversheetsPanel from "./panels/coversheets-panel";
 import CrossCheckPanel from "./panels/crosscheck-panel";
-import HeaderPanel from "./panels/header-panel";
 import PlanPanel from "./panels/plan-panel";
 import type { ParsedPlan } from "@/lib/types";
 
 const TABS = [
   { id: "plan", label: "1. Plan de certification", hint: "Extraction des exigences citees" },
-  { id: "coversheets", label: "2. Trames de coversheets", hint: "Preparation des documents" },
+  { id: "coversheets", label: "2. Preparer une coversheet", hint: "Exigences puis document de certification" },
   { id: "coherence", label: "3. Coherence des renvois", hint: "Chapitre cite / contenu reel" },
-  { id: "headers", label: "4. Controle des en-tetes", hint: "Premieres lignes des documents" },
-  { id: "crosscheck", label: "5. Recoupement", hint: "ACP / coversheets emises" },
+  { id: "crosscheck", label: "4. Recoupement", hint: "ACP / coversheets emises" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -62,7 +60,6 @@ export default function Workspace() {
       {tab === "plan" && <PlanPanel plan={plan} onPlan={setPlan} />}
       {tab === "coversheets" && <CoversheetsPanel plan={plan} onPlan={setPlan} />}
       {tab === "coherence" && <CoherencePanel />}
-      {tab === "headers" && <HeaderPanel />}
       {tab === "crosscheck" && <CrossCheckPanel plan={plan} onPlan={setPlan} />}
     </div>
   );

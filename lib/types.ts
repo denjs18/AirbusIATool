@@ -123,14 +123,54 @@ export interface CheckResult {
   suggestion?: string;
 }
 
-/** Coversheet de demonstration de conformite. */
-export interface Coversheet {
+/**
+ * Couverture d'une exigence par un document de certification.
+ *
+ * C'est une ligne du tableau de conformite de l'ACP : telle exigence est
+ * traitee par tel document, sous tel moyen de conformite. Sert au recoupement,
+ * pas a la redaction.
+ */
+export interface CoverageRecord {
   requirement: RequirementRef;
-  header: DocumentHeader;
+  /** Reference du document de certification qui couvre l'exigence. */
+  documentRef: string;
+  documentIssue?: string;
   mocIds: MocId[];
-  citations: ChapterCitation[];
-  /** Enonce de conformite. Vide dans une trame generee. */
-  complianceStatement?: string;
+}
+
+/** Document de certification joint a une coversheet. */
+export interface EnclosedDocument {
+  /** Reference telle qu'elle figure dans la coversheet. */
+  ref: string;
+  issue?: string;
+  title?: string;
+}
+
+/**
+ * Bloc du Compliance Statement : une ou plusieurs exigences traitees ensemble,
+ * et la justification qui explique comment le document joint y repond.
+ */
+export interface RequirementGroup {
+  requirements: RequirementRef[];
+  /** Moyens de conformite propres au bloc, qui peuvent differer du document. */
+  mocIds: MocId[];
+  /** Justification a rediger. Toujours vide a la generation. */
+  justification?: string;
+}
+
+/**
+ * Coversheet d'un document de certification.
+ *
+ * Une coversheet accompagne un document (parfois un lot) et rassemble toutes
+ * les exigences que ce document traite, groupees par bloc de justification.
+ */
+export interface Coversheet {
+  /** Famille du document, ex. "SSA", "SyDAS", "VVS". Sert de cle de regroupement. */
+  documentType: string;
+  enclosed: EnclosedDocument[];
+  mocIds: MocId[];
+  groups: RequirementGroup[];
+  header: DocumentHeader;
 }
 
 /** Document ACP/OCP apres analyse. */

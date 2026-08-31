@@ -13,7 +13,7 @@ import { Button, Card, Empty, FileInput, Metric, ResultList } from "../ui";
 import { crossCheck, renderCrossCheckCsv } from "@/lib/crosscheck";
 import { downloadText, safeFileName } from "@/lib/download";
 import { DEMO_FILES, describeLoadError } from "@/lib/demo";
-import { isRegistryFile, registryToCoversheets } from "@/lib/registry";
+import { isRegistryFile, registryToCoverage } from "@/lib/registry";
 import type { RegistryFile } from "@/lib/registry";
 import type { ParsedPlan } from "@/lib/types";
 
@@ -58,7 +58,7 @@ export default function CrossCheckPanel({
       plan && registry
         ? crossCheck({
             plan,
-            coversheets: registryToCoversheets(registry),
+            coversheets: registryToCoverage(registry),
             paragraphLevelCoverage: paragraphLevel,
           })
         : undefined,

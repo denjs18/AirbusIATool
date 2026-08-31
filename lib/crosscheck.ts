@@ -6,11 +6,11 @@
  * plan ?". Fait a la main, c'est une comparaison ligne a ligne entre un plan de
  * plusieurs centaines de pages et des dizaines de coversheets.
  */
-import type { CheckResult, Coversheet, MocId, ParsedPlan } from "./types";
+import type { CheckResult, CoverageRecord, MocId, ParsedPlan } from "./types";
 
 export interface CrossCheckInput {
   plan: ParsedPlan;
-  coversheets: Coversheet[];
+  coversheets: CoverageRecord[];
   /**
    * Admet qu'une coversheet emise au niveau du paragraphe couvre ses
    * sous-alineas : une coversheet CS 25.671 couvre alors CS 25.671(c)(1).
@@ -39,7 +39,7 @@ export interface CrossCheckReport {
   coverageRatio: number;
 }
 
-function mocOf(coversheet: Coversheet): MocId[] {
+function mocOf(coversheet: CoverageRecord): MocId[] {
   return [...coversheet.mocIds].sort() as MocId[];
 }
 
@@ -57,7 +57,7 @@ export function crossCheck({
 
   const planIds = new Set(plan.requirements.map((requirement) => requirement.id));
   const planParagraphs = new Set(plan.requirements.map((r) => paragraphKey(r.id)));
-  const coversheetsByRequirement = new Map<string, Coversheet[]>();
+  const coversheetsByRequirement = new Map<string, CoverageRecord[]>();
   for (const coversheet of coversheets) {
     const key = coversheet.requirement.id;
     const bucket = coversheetsByRequirement.get(key);
@@ -82,7 +82,7 @@ export function crossCheck({
           status: "info",
           label: `${requirement.id} : couverte au niveau du paragraphe`,
           detail: `Aucune coversheet dediee. ${parentSheets
-            .map((sheet) => sheet.header.documentRef ?? "sans reference")
+            .map((sheet) => sheet.documentRef)
             .join(", ")} couvre ${parent}, sous-alineas inclus.`,
           suggestion: "Confirmer que la convention du programme admet cette granularite.",
         });
@@ -122,7 +122,7 @@ export function crossCheck({
         status: "warning",
         label: `${requirement.id} : ${matching.length} coversheets`,
         detail: `Plusieurs coversheets couvrent la meme exigence : ${matching
-          .map((coversheet) => coversheet.header.documentRef ?? "sans reference")
+          .map((coversheet) => coversheet.documentRef)
           .join(", ")}.`,
         suggestion: "Verifier qu'il ne s'agit pas d'un doublon d'indice.",
       });
@@ -145,12 +145,12 @@ export function crossCheck({
 
         if (missing.length || extra.length) {
           results.push({
-            id: `crosscheck.moc.${requirement.id}.${coversheet.header.documentRef ?? "na"}`,
+            id: `crosscheck.moc.${requirement.id}.${coversheet.documentRef}`,
             status: missing.length ? "error" : "warning",
             label: `${requirement.id} : MoC divergents`,
             detail:
               `Plan : ${planMoc.join(", ") || "aucun"}. Coversheet ${
-                coversheet.header.documentRef ?? ""
+                coversheet.documentRef
               } : ${sheetMoc.join(", ") || "aucun"}.` +
               (missing.length ? ` Manquants dans la coversheet : ${missing.join(", ")}.` : "") +
               (extra.length ? ` En plus dans la coversheet : ${extra.join(", ")}.` : ""),
@@ -164,8 +164,7 @@ export function crossCheck({
 
     // Divergence d'amendement CS-25 entre le plan et la coversheet.
     for (const coversheet of matching) {
-      const sheetRef = coversheet.header.requirementRef ?? "";
-      const sheetAmendment = sheetRef.match(/Am(?:d?t|endment)\.?\s*(\d{1,3})/i)?.[1];
+      const sheetAmendment = coversheet.requirement.qualifier?.match(/(\d{1,3})/)?.[1];
       const planAmendment = requirement.qualifier?.match(/(\d{1,3})/)?.[1];
       if (planAmendment && sheetAmendment && planAmendment !== sheetAmendment) {
         results.push({
@@ -190,7 +189,7 @@ export function crossCheck({
       status: "warning",
       label: `${requirementId} : coversheet hors plan`,
       detail: `${sheets
-        .map((sheet) => sheet.header.documentRef ?? "sans reference")
+        .map((sheet) => sheet.documentRef)
         .join(", ")} couvre ${requirementId}, exigence non citee dans ${plan.sourceName}.`,
       suggestion: "Ajouter l'exigence au plan ou retirer la coversheet du perimetre.",
     });

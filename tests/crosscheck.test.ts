@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { crossCheck, renderCrossCheckCsv } from "../lib/crosscheck";
 import { parsePlan } from "../lib/parse-acp";
-import { isRegistryFile, registryToCoversheets } from "../lib/registry";
+import { isRegistryFile, registryToCoverage } from "../lib/registry";
 import type { PdfDocumentText } from "../lib/types";
 
 const PLAN: PdfDocumentText = {
@@ -39,7 +39,7 @@ const registry = {
   ],
 };
 
-describe("registryToCoversheets", () => {
+describe("registryToCoverage", () => {
   it("valide la forme du registre", () => {
     expect(isRegistryFile(registry)).toBe(true);
     expect(isRegistryFile({ coversheets: [{ documentRef: 1 }] })).toBe(false);
@@ -47,13 +47,13 @@ describe("registryToCoversheets", () => {
   });
 
   it("normalise les identifiants d'exigence comme le plan", () => {
-    const coversheets = registryToCoversheets(registry);
+    const coversheets = registryToCoverage(registry);
     expect(coversheets[0].requirement.id).toBe("CS 25.671");
     expect(coversheets[0].requirement.qualifier).toBe("Amdt 26");
   });
 
   it("ecarte les codes MoC inconnus", () => {
-    const [coversheet] = registryToCoversheets({
+    const [coversheet] = registryToCoverage({
       coversheets: [{ documentRef: "CVS-1", requirement: "CS 25.671", moc: ["1", "MC42"] }],
     });
     expect(coversheet.mocIds).toEqual(["1"]);
@@ -61,7 +61,7 @@ describe("registryToCoversheets", () => {
 });
 
 describe("crossCheck", () => {
-  const report = crossCheck({ plan, coversheets: registryToCoversheets(registry) });
+  const report = crossCheck({ plan, coversheets: registryToCoverage(registry) });
 
   it("detecte une exigence du plan sans coversheet", () => {
     expect(report.uncovered).toEqual(["CS 25.703"]);
@@ -102,7 +102,7 @@ describe("crossCheck", () => {
   it("conclut positivement quand les perimetres sont alignes", () => {
     const aligned = crossCheck({
       plan,
-      coversheets: registryToCoversheets({
+      coversheets: registryToCoverage({
         coversheets: [
           { documentRef: "A", requirement: "CS 25.671", qualifier: "Amdt 27", moc: ["1", "2", "3", "6"] },
           { documentRef: "B", requirement: "CS 25.675", moc: ["1", "4"] },
@@ -119,7 +119,7 @@ describe("crossCheck", () => {
 
 describe("renderCrossCheckCsv", () => {
   it("produit un CSV echappe exploitable en revue", () => {
-    const csv = renderCrossCheckCsv(crossCheck({ plan, coversheets: registryToCoversheets(registry) }));
+    const csv = renderCrossCheckCsv(crossCheck({ plan, coversheets: registryToCoverage(registry) }));
     expect(csv.split("\n")[0]).toBe("Statut;Controle;Detail;Action proposee");
     expect(csv).toContain('"error"');
   });
@@ -143,7 +143,7 @@ describe("crossCheck - couverture au niveau du paragraphe", () => {
   };
 
   const planSub = parsePlan(PLAN_SUB);
-  const sheets = registryToCoversheets({
+  const sheets = registryToCoverage({
     coversheets: [{ documentRef: "CVS-27-FCS-0001", requirement: "CS 25.671", moc: ["1", "2"] }],
   });
 
@@ -174,7 +174,7 @@ describe("crossCheck - couverture au niveau du paragraphe", () => {
   });
 
   it("n'ecarte du hors-plan que les coversheets dont un sous-alinea est au plan", () => {
-    const withOrphan = registryToCoversheets({
+    const withOrphan = registryToCoverage({
       coversheets: [
         { documentRef: "CVS-A", requirement: "CS 25.671", moc: ["1", "2"] },
         { documentRef: "CVS-B", requirement: "CS 25.1329", moc: ["1"] },
