@@ -16,6 +16,7 @@ import { Button, Card, Empty, Metric } from "../ui";
 import { downloadText, safeFileName } from "@/lib/download";
 import { loadLibrary, saveLibrary } from "@/lib/library-storage";
 import { dedupeRequirements, extractOccurrencesFromPage } from "@/lib/requirements";
+import type { WorkbookIssue } from "@/lib/workbook";
 import {
   countPlaceholders,
   documentTypesOf,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/templates";
 
 const DEMO_LIBRARY = "/fixtures/blocs-types.json";
+const MODEL_WORKBOOK = "/modele-blocs-types.xlsx";
 
 export default function TemplatesPanel() {
   const [library, setLibrary] = useState<TemplateLibrary>(EMPTY_LIBRARY);
@@ -38,6 +40,9 @@ export default function TemplatesPanel() {
   const [text, setText] = useState("");
   const [editing, setEditing] = useState<BlockTemplate>();
   const [error, setError] = useState<string>();
+  /** Anomalies de la derniere lecture de classeur, avec leur numero de ligne. */
+  const [issues, setIssues] = useState<WorkbookIssue[]>([]);
+  const [loaded, setLoaded] = useState<string>();
 
   useEffect(() => setLibrary(loadLibrary()), []);
 
@@ -79,6 +84,29 @@ export default function TemplatesPanel() {
     setEditing(undefined);
   }
 
+  /** Charge un classeur rempli. Le fichier est lu dans l'onglet, rien n'est transmis. */
+  async function importWorkbook(file: File) {
+    setError(undefined);
+    setIssues([]);
+    try {
+      const { readLibraryWorkbook } = await import("@/lib/workbook-browser");
+      const result = await readLibraryWorkbook(file);
+      setIssues(result.issues);
+      setLoaded(
+        `${file.name} - ${result.library.templates.length} bloc(s) sur ${result.rowsRead} ligne(s)`,
+      );
+      if (result.library.templates.length) {
+        persist(mergeTemplates(library, result.library.templates));
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? `Lecture du classeur impossible : ${cause.message}`
+          : "Lecture du classeur impossible.",
+      );
+    }
+  }
+
   async function importLibrary(source: File | string) {
     setError(undefined);
     try {
@@ -103,6 +131,29 @@ export default function TemplatesPanel() {
         subtitle="Pour chaque famille de coversheet : quelles exigences vont ensemble, et la redaction qui leur correspond."
         actions={
           <>
+            <a
+              href={MODEL_WORKBOOK}
+              download
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+            >
+              Telecharger le modele Excel
+            </a>
+            <label
+              className="cursor-pointer rounded-md border px-3 py-1.5 text-sm"
+              style={{ borderColor: "var(--border)" }}
+            >
+              Charger un classeur
+              <input
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) importWorkbook(file);
+                }}
+              />
+            </label>
             <Button variant="secondary" onClick={() => importLibrary(DEMO_LIBRARY)}>
               Charger l&apos;exemple fictif
             </Button>
@@ -150,6 +201,33 @@ export default function TemplatesPanel() {
             tone={library.templates.some((t) => !t.text) ? "warning" : "ok"}
           />
         </div>
+
+        {loaded && (
+          <p className="mt-4 text-sm">
+            Classeur lu : <span className="font-mono text-xs">{loaded}</span>
+          </p>
+        )}
+
+        {issues.length > 0 && (
+          <div
+            className="mt-3 rounded-md border p-3"
+            style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+          >
+            <p className="text-sm font-medium text-warn-500">
+              {issues.length} ligne{issues.length > 1 ? "s" : ""} a revoir dans le classeur
+            </p>
+            <ul className="mt-2 flex flex-col gap-1">
+              {issues.map((issue) => (
+                <li key={`${issue.row}-${issue.message}`} className="text-sm">
+                  <span className="font-mono text-xs">
+                    {issue.row ? `ligne ${issue.row}` : "classeur"}
+                  </span>{" "}
+                  <span style={{ color: "var(--text-muted)" }}>{issue.message}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {types.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2">

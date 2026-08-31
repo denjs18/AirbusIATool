@@ -14,7 +14,7 @@ place des ingénieurs de certification.
 | --- | --- | --- |
 | 1. Plan de certification | Structurer l'information d'un ACP / OCP de plusieurs centaines de pages | Liste des exigences citées (CS-25, JAR-25, AMC, SC, CRI, ESF) avec page, section et moyens de conformité — export CSV |
 | 2. Préparer une coversheet | Monter la coversheet d'un document de certification | On désigne le document et on coche les exigences à couvrir ; l'outil restitue la rédaction mémorisée pour chaque combinaison, `§x.x` à pointer — export Markdown |
-| Paramètres | Tenir la bibliothèque de blocs types | Par famille de coversheet : quelles exigences vont ensemble, et la rédaction qui leur correspond |
+| Paramètres | Tenir la bibliothèque de blocs types | Modèle Excel à télécharger, à compléter et à recharger : par famille de coversheet, quelles exigences vont ensemble et la rédaction qui leur correspond |
 | 3. Cohérence des renvois | Vérifier qu'un chapitre cité correspond bien au contenu | Contrôle de chaque renvoi contre la structure réelle du PDF fourni : chapitre inexistant, titre divergent, issue obsolète |
 | 4. Recoupement ACP ↔ coversheets | Croiser les exigences de l'ACP avec les documents qui les couvrent | Exigences non couvertes, couvertures hors plan, doublons, MoC divergents, taux de couverture — export CSV |
 
@@ -43,6 +43,34 @@ consommerait A avant que `{A, B}` n'ait sa chance.
 **Ce que l'outil ne fait pas :** désigner les paragraphes à citer. Ils dépendent du contenu
 du document joint et relèvent de sa lecture par l'ingénieur. L'outil compte les `§x.x`
 restants et les rappelle, sans jamais chercher à les deviner.
+
+### Où vivent les rédactions
+
+Elles ne sont **ni dans le dépôt, ni dans l'application**. Elles vivent dans un classeur
+Excel que les équipes remplissent et rechargent à l'ouverture.
+
+L'onglet Paramètres propose le modèle en téléchargement (`public/modele-blocs-types.xlsx`,
+produit par `npm run modele`) : une notice, une feuille **Blocs types** à compléter, une
+feuille d'exemples fictifs. Une ligne par bloc de justification :
+
+| Famille de coversheet | Exigences | Moyens de conformité | Rédaction | Coversheet source |
+| --- | --- | --- | --- | --- |
+| SYDMP | CS 25.671(a) ; JAR 25.1301(a) | 0 | The enclosed SyDMP… §x.x… | CVS-SYDMP issue 1 |
+
+Le classeur est lu dans le navigateur (`lib/workbook-browser.ts`) : il ne quitte pas le
+poste. La lecture est **indulgente sur la forme** — ordre des colonnes libre, accents et
+casse indifférents, séparateurs multiples — et **stricte sur le fond** : toute ligne
+rejetée est signalée avec son numéro Excel et sa raison. Un fichier à moitié lu sans que
+personne ne le sache serait pire qu'un fichier refusé.
+
+Ce choix répond à une question de gouvernance autant que de technique. Le classeur **est
+un document de certification** : il est extrait des coversheets, il a leur classification.
+Il se range donc avec elles, dans le référentiel documentaire — pas dans le dépôt de code.
+
+> **Tout ce qui est déposé dans le dépôt est servi par l'hébergeur à qui connaît
+> l'adresse.** Un déploiement Vercel n'est pas protégé par défaut. Mettre des rédactions
+> réelles dans le dépôt ne revient pas à les mettre dans un GitHub privé : cela revient à
+> les publier.
 
 ## Positionnement
 

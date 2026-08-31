@@ -14,7 +14,7 @@
  * appellent une redaction, l'exigence A seule en appelle une autre. Un bloc
  * type ne s'applique donc que si toutes ses exigences sont selectionnees.
  */
-import type { RequirementGroup, RequirementRef } from "./types";
+import type { MocId, RequirementGroup, RequirementRef } from "./types";
 
 export interface BlockTemplate {
   /** Famille de document a laquelle le bloc appartient, ex. "SyDMP". */
@@ -23,6 +23,12 @@ export interface BlockTemplate {
   requirementIds: string[];
   /** Redaction memorisee, reperes de paragraphe compris. */
   text?: string;
+  /**
+   * Moyens de conformite propres au bloc.
+   * Certaines coversheets les precisent bloc par bloc, quand ils different de
+   * ceux du document ; a defaut, ceux du document s'appliquent.
+   */
+  mocIds?: MocId[];
   /** Coversheet d'origine, pour pouvoir remonter a la source. */
   source?: string;
 }
@@ -170,7 +176,7 @@ export function applyTemplates(
 
     blocks.push({
       requirements: picked,
-      mocIds: [],
+      mocIds: template.mocIds ?? [],
       justification: template.text,
       template,
     });
@@ -203,6 +209,7 @@ export function learnFromBlocks(
     documentType: normalizeDocumentType(documentType),
     requirementIds: block.requirements.map((requirement) => requirement.id),
     text: block.justification,
+    mocIds: block.mocIds.length ? block.mocIds : undefined,
     source,
   }));
 }
