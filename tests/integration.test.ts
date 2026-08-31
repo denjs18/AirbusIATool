@@ -70,9 +70,9 @@ describe("extraction du plan de certification", () => {
 
   it("remonte les MoC annonces dans le plan", () => {
     const occurrence = plan.occurrences.find(
-      (o) => o.id === "CS 25.671" && o.mocCodes.length > 0,
+      (o) => o.id === "CS 25.671" && o.mocIds.length > 0,
     );
-    expect(occurrence?.mocCodes).toEqual(["MC1", "MC2", "MC3", "MC6"]);
+    expect(occurrence?.mocIds).toEqual(["1", "2", "3", "6"]);
   });
 
   it("produit des statistiques exploitables", () => {
@@ -97,7 +97,7 @@ describe("generation des trames de coversheet", () => {
 
   it("reprend les MoC du plan dans la trame", () => {
     const sheet = coversheets.find((c) => c.requirement.id === "CS 25.671");
-    expect(sheet?.mocCodes).toEqual(["MC1", "MC2", "MC3", "MC6"]);
+    expect(sheet?.mocIds).toEqual(["1", "2", "3", "6"]);
   });
 
   it("rend une trame complete et tracable", () => {
@@ -196,7 +196,7 @@ describe("recoupement ACP / registre de coversheets", () => {
   it("detecte les MoC manquants sur CS 25.671 (defaut volontaire)", () => {
     const moc = report.results.find((r) => r.id.startsWith("crosscheck.moc.CS 25.671"));
     expect(moc?.status).toBe("error");
-    expect(moc?.detail).toContain("MC3");
+    expect(moc?.detail).toContain("3");
   });
 
   it("chiffre la couverture du plan", () => {

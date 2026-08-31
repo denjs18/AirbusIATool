@@ -15,7 +15,7 @@ const PLAN: PdfDocumentText = {
         "Programme: A32N-DEMO",
         "ATA chapter: 27",
         "2.1 Primary requirements",
-        "- CS 25.671 General, at Amdt 27. MoC: 1, 2, 3 and 6.",
+        "- CS 25.671 amdt 27 General. MoC: 1, 2, 3 and 6.",
         "- CS 25.675 Stops. MoC: 1, 4.",
         "- CS 25.703 Takeoff warning system. MoC: 1, 5, 6.",
       ].join("\n"),
@@ -30,12 +30,12 @@ const registry = {
   ataChapter: "27",
   coversheets: [
     // MoC incomplets par rapport au plan (MC3 et MC6 manquants).
-    { documentRef: "CVS-27-FCS-0001", requirement: "CS 25.671", amendment: "Amdt 26", moc: ["MC1", "MC2"] },
-    { documentRef: "CVS-27-FCS-0003", requirement: "CS 25.675", moc: ["MC1", "MC4"] },
+    { documentRef: "CVS-27-FCS-0001", requirement: "CS 25.671", qualifier: "Amdt 26", moc: ["1", "2"] },
+    { documentRef: "CVS-27-FCS-0003", requirement: "CS 25.675", moc: ["1", "4"] },
     // Doublon sur CS 25.675.
-    { documentRef: "CVS-27-FCS-0022", requirement: "CS 25.675", moc: ["MC1", "MC4"] },
+    { documentRef: "CVS-27-FCS-0022", requirement: "CS 25.675", moc: ["1", "4"] },
     // Exigence absente du plan.
-    { documentRef: "CVS-27-FCS-0021", requirement: "CS 25.1329", moc: ["MC1", "MC6"] },
+    { documentRef: "CVS-27-FCS-0021", requirement: "CS 25.1329", moc: ["1", "6"] },
   ],
 };
 
@@ -49,14 +49,14 @@ describe("registryToCoversheets", () => {
   it("normalise les identifiants d'exigence comme le plan", () => {
     const coversheets = registryToCoversheets(registry);
     expect(coversheets[0].requirement.id).toBe("CS 25.671");
-    expect(coversheets[0].requirement.amendment).toBe("Amdt 26");
+    expect(coversheets[0].requirement.qualifier).toBe("Amdt 26");
   });
 
   it("ecarte les codes MoC inconnus", () => {
     const [coversheet] = registryToCoversheets({
-      coversheets: [{ documentRef: "CVS-1", requirement: "CS 25.671", moc: ["MC1", "MC42"] }],
+      coversheets: [{ documentRef: "CVS-1", requirement: "CS 25.671", moc: ["1", "MC42"] }],
     });
-    expect(coversheet.mocCodes).toEqual(["MC1"]);
+    expect(coversheet.mocIds).toEqual(["1"]);
   });
 });
 
@@ -84,8 +84,8 @@ describe("crossCheck", () => {
   it("detecte des MoC manquants dans la coversheet", () => {
     const moc = report.results.find((r) => r.id.startsWith("crosscheck.moc.CS 25.671"));
     expect(moc?.status).toBe("error");
-    expect(moc?.detail).toContain("MC3");
-    expect(moc?.detail).toContain("MC6");
+    expect(moc?.detail).toContain("3");
+    expect(moc?.detail).toContain("6");
   });
 
   it("detecte un amendement divergent", () => {
@@ -104,9 +104,9 @@ describe("crossCheck", () => {
       plan,
       coversheets: registryToCoversheets({
         coversheets: [
-          { documentRef: "A", requirement: "CS 25.671", amendment: "Amdt 27", moc: ["MC1", "MC2", "MC3", "MC6"] },
-          { documentRef: "B", requirement: "CS 25.675", moc: ["MC1", "MC4"] },
-          { documentRef: "C", requirement: "CS 25.703", moc: ["MC1", "MC5", "MC6"] },
+          { documentRef: "A", requirement: "CS 25.671", qualifier: "Amdt 27", moc: ["1", "2", "3", "6"] },
+          { documentRef: "B", requirement: "CS 25.675", moc: ["1", "4"] },
+          { documentRef: "C", requirement: "CS 25.703", moc: ["1", "5", "6"] },
         ],
       }),
     });
@@ -144,7 +144,7 @@ describe("crossCheck - couverture au niveau du paragraphe", () => {
 
   const planSub = parsePlan(PLAN_SUB);
   const sheets = registryToCoversheets({
-    coversheets: [{ documentRef: "CVS-27-FCS-0001", requirement: "CS 25.671", moc: ["MC1", "MC2"] }],
+    coversheets: [{ documentRef: "CVS-27-FCS-0001", requirement: "CS 25.671", moc: ["1", "2"] }],
   });
 
   it("compte le sous-alinea comme non couvert par defaut", () => {
@@ -176,8 +176,8 @@ describe("crossCheck - couverture au niveau du paragraphe", () => {
   it("n'ecarte du hors-plan que les coversheets dont un sous-alinea est au plan", () => {
     const withOrphan = registryToCoversheets({
       coversheets: [
-        { documentRef: "CVS-A", requirement: "CS 25.671", moc: ["MC1", "MC2"] },
-        { documentRef: "CVS-B", requirement: "CS 25.1329", moc: ["MC1"] },
+        { documentRef: "CVS-A", requirement: "CS 25.671", moc: ["1", "2"] },
+        { documentRef: "CVS-B", requirement: "CS 25.1329", moc: ["1"] },
       ],
     });
     const report = crossCheck({

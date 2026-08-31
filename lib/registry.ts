@@ -5,18 +5,19 @@
  * liste plate (reference, exigence, MoC). Permet le recoupement sans avoir a
  * ouvrir chaque coversheet.
  */
-import { isMocCode } from "./moc";
+import { isKnownMoc } from "./moc";
 import {
   dedupeRequirements,
   extractOccurrencesFromPage,
   formatRequirementId,
 } from "./requirements";
-import type { Coversheet, MocCode, RequirementRef } from "./types";
+import type { Coversheet, MocId, RequirementRef } from "./types";
 
 export interface RegistryEntry {
   documentRef: string;
   requirement: string;
-  amendment?: string;
+  /** Amendement CS ou chapitre JAR applicable. */
+  qualifier?: string;
   moc?: string[];
   issue?: string;
 }
@@ -50,21 +51,21 @@ export function parseRequirementString(value: string): RequirementRef {
 export function registryToCoversheets(file: RegistryFile): Coversheet[] {
   return file.coversheets.map((entry) => {
     const requirement = parseRequirementString(entry.requirement);
-    const mocCodes = (entry.moc ?? []).filter((code): code is MocCode => isMocCode(code));
+    const mocIds = (entry.moc ?? []).filter((code) => isKnownMoc(code));
 
     return {
-      requirement: entry.amendment ? { ...requirement, amendment: entry.amendment } : requirement,
+      requirement: entry.qualifier ? { ...requirement, qualifier: entry.qualifier } : requirement,
       header: {
         documentRef: entry.documentRef,
         issue: entry.issue ?? "1",
         programme: file.programme,
         ataChapter: file.ataChapter,
-        requirementRef: entry.amendment
-          ? `${requirement.id} (${entry.amendment})`
+        requirementRef: entry.qualifier
+          ? `${requirement.id} (${entry.qualifier})`
           : requirement.id,
-        moc: mocCodes.join(", "),
+        moc: mocIds.join(", "),
       },
-      mocCodes,
+      mocIds,
       citations: [],
     };
   });

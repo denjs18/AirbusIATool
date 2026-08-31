@@ -57,7 +57,7 @@ export default function CoversheetsPanel({
   const markdown = current ? renderCoversheetMarkdown(current, plan.sourceName) : "";
   const fromPlan = coversheets.filter((sheet) =>
     plan.occurrences.some(
-      (occurrence) => occurrence.id === sheet.requirement.id && occurrence.mocCodes.length > 0,
+      (occurrence) => occurrence.id === sheet.requirement.id && occurrence.mocIds.length > 0,
     ),
   ).length;
 
@@ -147,7 +147,7 @@ export default function CoversheetsPanel({
                     <span className="block font-mono text-xs">{sheet.header.documentRef}</span>
                     <span className={`block text-xs ${active ? "text-white/80" : ""}`}
                       style={active ? undefined : { color: "var(--text-muted)" }}>
-                      {sheet.requirement.id} - {sheet.mocCodes.join(" ")}
+                      {sheet.requirement.id} - {sheet.mocIds.join(" ")}
                     </span>
                   </button>
                 </li>
@@ -176,7 +176,7 @@ export default function CoversheetsPanel({
             }
           >
             <div className="mb-4 flex flex-wrap gap-2">
-              {current.mocCodes.map((code) => (
+              {current.mocIds.map((code) => (
                 <span
                   key={code}
                   className="rounded border px-2 py-1 text-xs"

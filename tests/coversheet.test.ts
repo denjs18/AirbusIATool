@@ -29,7 +29,7 @@ const PLAN: PdfDocumentText = {
       page: 2,
       text: [
         "2.1 Primary requirements",
-        "- CS 25.671 General, control systems, at Amdt 27. MoC: 1, 2, 3 and 6.",
+        "- CS 25.671 amdt 27 General, control systems. MoC: 1, 2, 3 and 6.",
         "- CS 25.675 Stops. MoC: 1, 4.",
         "- CS 25.703 Takeoff warning system.",
       ].join("\n"),
@@ -56,14 +56,14 @@ describe("buildCoversheet", () => {
       plan.header,
       OPTIONS,
     );
-    expect(coversheet.mocCodes).toEqual(["MC1", "MC2", "MC3", "MC6"]);
-    expect(coversheet.header.moc).toBe("MC1, MC2, MC3, MC6");
+    expect(coversheet.mocIds).toEqual(["1", "2", "3", "6"]);
+    expect(coversheet.header.moc).toBe("MoC 1, MoC 2, MoC 3, MoC 6");
   });
 
   it("propose des MoC par defaut quand le plan n'en cite pas", () => {
     const requirement = plan.requirements.find((r) => r.id === "CS 25.703")!;
     const coversheet = buildCoversheet(requirement, [], plan.header, OPTIONS);
-    expect(coversheet.mocCodes.length).toBeGreaterThan(0);
+    expect(coversheet.mocIds.length).toBeGreaterThan(0);
   });
 
   it("herite du programme et de l'ATA du plan", () => {

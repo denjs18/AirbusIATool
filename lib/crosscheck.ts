@@ -6,7 +6,7 @@
  * plan ?". Fait a la main, c'est une comparaison ligne a ligne entre un plan de
  * plusieurs centaines de pages et des dizaines de coversheets.
  */
-import type { CheckResult, Coversheet, MocCode, ParsedPlan } from "./types";
+import type { CheckResult, Coversheet, MocId, ParsedPlan } from "./types";
 
 export interface CrossCheckInput {
   plan: ParsedPlan;
@@ -39,8 +39,8 @@ export interface CrossCheckReport {
   coverageRatio: number;
 }
 
-function mocOf(coversheet: Coversheet): MocCode[] {
-  return [...coversheet.mocCodes].sort() as MocCode[];
+function mocOf(coversheet: Coversheet): MocId[] {
+  return [...coversheet.mocIds].sort() as MocId[];
 }
 
 /**
@@ -133,14 +133,14 @@ export function crossCheck({
       ...new Set(
         plan.occurrences
           .filter((occurrence) => occurrence.id === requirement.id)
-          .flatMap((occurrence) => occurrence.mocCodes),
+          .flatMap((occurrence) => occurrence.mocIds),
       ),
     ].sort();
 
     if (planMoc.length) {
       for (const coversheet of matching) {
         const sheetMoc = mocOf(coversheet);
-        const missing = planMoc.filter((code) => !sheetMoc.includes(code as MocCode));
+        const missing = planMoc.filter((code) => !sheetMoc.includes(code as MocId));
         const extra = sheetMoc.filter((code) => !planMoc.includes(code));
 
         if (missing.length || extra.length) {
@@ -166,7 +166,7 @@ export function crossCheck({
     for (const coversheet of matching) {
       const sheetRef = coversheet.header.requirementRef ?? "";
       const sheetAmendment = sheetRef.match(/Am(?:d?t|endment)\.?\s*(\d{1,3})/i)?.[1];
-      const planAmendment = requirement.amendment?.match(/(\d{1,3})/)?.[1];
+      const planAmendment = requirement.qualifier?.match(/(\d{1,3})/)?.[1];
       if (planAmendment && sheetAmendment && planAmendment !== sheetAmendment) {
         results.push({
           id: `crosscheck.amendment.${requirement.id}`,

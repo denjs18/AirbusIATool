@@ -105,7 +105,7 @@ export function planStats(plan: ParsedPlan) {
   const withoutMoc = plan.requirements.filter(
     (requirement) =>
       !plan.occurrences.some(
-        (occurrence) => occurrence.id === requirement.id && occurrence.mocCodes.length > 0,
+        (occurrence) => occurrence.id === requirement.id && occurrence.mocIds.length > 0,
       ),
   );
 

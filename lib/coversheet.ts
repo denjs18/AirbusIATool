@@ -10,7 +10,7 @@ import { expectedEvidenceFor, MOC_DEFINITIONS, suggestMocForRequirement } from "
 import type {
   Coversheet,
   DocumentHeader,
-  MocCode,
+  MocId,
   ParsedPlan,
   RequirementOccurrence,
   RequirementRef,
@@ -60,9 +60,9 @@ export function buildCoversheet(
 ): Coversheet {
   const prefix = options.refPrefix ?? DEFAULTS.refPrefix;
   const mocFromPlan = [
-    ...new Set(occurrences.flatMap((occurrence) => occurrence.mocCodes)),
-  ].sort() as MocCode[];
-  const mocCodes = mocFromPlan.length ? mocFromPlan : suggestMocForRequirement(requirement.id);
+    ...new Set(occurrences.flatMap((occurrence) => occurrence.mocIds)),
+  ].sort() as MocId[];
+  const mocIds = mocFromPlan.length ? mocFromPlan : suggestMocForRequirement(requirement.id);
 
   const header: DocumentHeader = {
     documentRef: coversheetRef(prefix, (options.refStart ?? DEFAULTS.refStart) + index - 1),
@@ -71,10 +71,10 @@ export function buildCoversheet(
     date: options.issueDate ?? new Date().toISOString().slice(0, 10),
     ataChapter: options.ataChapter ?? planHeader.ataChapter ?? "27",
     programme: options.programme ?? planHeader.programme ?? TO_BE_WRITTEN,
-    requirementRef: requirement.amendment
-      ? `${requirement.id} (${requirement.amendment})`
+    requirementRef: requirement.qualifier
+      ? `${requirement.id} (${requirement.qualifier})`
       : requirement.id,
-    moc: mocCodes.join(", "),
+    moc: mocIds.map((id) => `MoC ${id}`).join(", "),
     author: options.author ?? TO_BE_WRITTEN,
     checker: TO_BE_WRITTEN,
     approver: TO_BE_WRITTEN,
@@ -84,7 +84,7 @@ export function buildCoversheet(
   return {
     requirement,
     header,
-    mocCodes,
+    mocIds,
     // Les renvois vers les documents de substantiation restent a etablir :
     // c'est une decision d'ingenierie, pas une deduction mecanique.
     citations: [],
@@ -132,7 +132,7 @@ export function renderCoversheetMarkdown(
   coversheet: Coversheet,
   planSource?: string,
 ): string {
-  const { header, requirement, mocCodes } = coversheet;
+  const { header, requirement, mocIds } = coversheet;
   const lines: string[] = [];
 
   lines.push(`# Compliance coversheet - ${requirement.id}`, "");
@@ -146,7 +146,7 @@ export function renderCoversheetMarkdown(
   lines.push("## 1. Objet", "");
   lines.push(
     `Demonstration de conformite a l'exigence ${requirement.id}` +
-      (requirement.amendment ? ` (${requirement.amendment})` : "") +
+      (requirement.qualifier ? ` (${requirement.qualifier})` : "") +
       ".",
     "",
   );
@@ -154,14 +154,14 @@ export function renderCoversheetMarkdown(
   lines.push("## 2. Exigence applicable", "");
   lines.push(`- Reference : ${requirement.id}`);
   lines.push(`- Nature : ${requirement.kind}`);
-  if (requirement.amendment) lines.push(`- Amendement : ${requirement.amendment}`);
+  if (requirement.qualifier) lines.push(`- Amendement : ${requirement.qualifier}`);
   lines.push(`- Texte de l'exigence : ${TO_BE_WRITTEN} (reporter l'enonce depuis le referentiel)`);
   lines.push("");
 
   lines.push("## 3. Moyens de conformite retenus", "");
   lines.push("| Code | Libelle | Retenu |", "| --- | --- | --- |");
-  for (const code of mocCodes) {
-    lines.push(`| ${code} | ${MOC_DEFINITIONS[code].labelFr} | X |`);
+  for (const code of mocIds) {
+    lines.push(`| ${code} | ${MOC_DEFINITIONS[code]?.labelFr ?? "-"} | X |`);
   }
   lines.push("");
 
@@ -170,7 +170,7 @@ export function renderCoversheetMarkdown(
     "| Type attendu | Reference | Issue | Chapitre | Titre du chapitre |",
     "| --- | --- | --- | --- | --- |",
   );
-  for (const evidence of expectedEvidenceFor(mocCodes)) {
+  for (const evidence of expectedEvidenceFor(mocIds)) {
     lines.push(`| ${evidence} | ${TO_BE_WRITTEN} | | | |`);
   }
   lines.push("");
@@ -209,7 +209,7 @@ export function renderCoversheetIndex(coversheets: Coversheet[]): string {
   ];
   for (const coversheet of coversheets) {
     lines.push(
-      `| ${coversheet.header.documentRef} | ${coversheet.requirement.id} | ${coversheet.mocCodes.join(", ")} |`,
+      `| ${coversheet.header.documentRef} | ${coversheet.requirement.id} | ${coversheet.mocIds.join(", ")} |`,
     );
   }
   return lines.join("\n");

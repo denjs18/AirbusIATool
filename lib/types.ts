@@ -9,6 +9,7 @@
 /** Reference reglementaire citee dans un document de certification. */
 export type RequirementKind =
   | "CS" // CS-25 paragraph, ex. CS 25.671
+  | "JAR" // JAR-25 paragraph, ex. JAR 25.1301(a) ch. 11
   | "AMC" // Acceptable Means of Compliance, ex. AMC 25.1309
   | "SC" // Special Condition
   | "CRI" // Certification Review Item
@@ -23,8 +24,18 @@ export interface RequirementRef {
   paragraph: string;
   /** Sous-alinea eventuel, ex. "(c)(2)". */
   subparagraph?: string;
-  /** Amendement CS-25 si cite a proximite, ex. "Amdt 27". */
-  amendment?: string;
+  /**
+   * Version de l'exigence citee a proximite : amendement pour un paragraphe CS
+   * ("Amdt 23"), chapitre pour un paragraphe JAR ("ch. 11"). Les deux jouent le
+   * meme role et ne sont pas reduits l'un a l'autre.
+   */
+  qualifier?: string;
+  /**
+   * Appendices cites, pour les CRI notamment. Un meme CRI interprete par deux
+   * appendices differents donne lieu a deux justifications distinctes dans une
+   * coversheet : l'appendice fait donc partie de la citation.
+   */
+  appendices?: string[];
   /** Texte exact tel que rencontre dans le document source. */
   raw: string;
 }
@@ -35,29 +46,23 @@ export interface RequirementOccurrence extends RequirementRef {
   /** Extrait de contexte pour permettre la relecture humaine. */
   context: string;
   /** Moyens de conformite detectes dans le contexte immediat. */
-  mocCodes: MocCode[];
+  mocIds: MocId[];
   /** Titre de section du document ou l'occurrence a ete trouvee, si connu. */
   section?: string;
 }
 
 /**
- * Moyens de conformite EASA (Means of Compliance).
- * Codification usuelle MC0..MC9 des plans de certification.
+ * Identifiant de moyen de conformite.
+ *
+ * "0".."9" pour les MoC EASA, mais pas seulement : les plans rencontres
+ * utilisent aussi des lettres pour designer une famille de documents (ex.
+ * "S" pour une synthese de validation et verification couvrant les MoC 4 et 6).
+ * Le type reste donc ouvert, et seuls les MoC connus portent une definition.
  */
-export type MocCode =
-  | "MC0"
-  | "MC1"
-  | "MC2"
-  | "MC3"
-  | "MC4"
-  | "MC5"
-  | "MC6"
-  | "MC7"
-  | "MC8"
-  | "MC9";
+export type MocId = string;
 
 export interface MocDefinition {
-  code: MocCode;
+  id: MocId;
   labelFr: string;
   labelEn: string;
   /** Documents de substantiation typiquement attendus pour ce MoC. */
@@ -122,7 +127,7 @@ export interface CheckResult {
 export interface Coversheet {
   requirement: RequirementRef;
   header: DocumentHeader;
-  mocCodes: MocCode[];
+  mocIds: MocId[];
   citations: ChapterCitation[];
   /** Enonce de conformite. Vide dans une trame generee. */
   complianceStatement?: string;

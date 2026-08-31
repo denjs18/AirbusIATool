@@ -107,14 +107,14 @@ describe("checkHeader", () => {
   });
 
   it("signale un code MoC hors nomenclature", () => {
-    const results = checkHeader({ ...parseHeader(VALID), moc: "MC2, MC12" }, { today: TODAY });
+    const results = checkHeader({ ...parseHeader(VALID), moc: "MoC 2, MoC 12" }, { today: TODAY });
     const moc = results.find((result) => result.id === "header.moc.invalid");
     expect(moc?.status).toBe("error");
-    expect(moc?.detail).toContain("MC12");
+    expect(moc?.detail).toContain("12");
   });
 
   it("accepte les codes MoC valides", () => {
-    const results = checkHeader({ ...parseHeader(VALID), moc: "MC1, MC2, MC9" }, { today: TODAY });
+    const results = checkHeader({ ...parseHeader(VALID), moc: "MoC 1, MoC 2, MoC 9" }, { today: TODAY });
     expect(results.some((result) => result.id.startsWith("header.moc"))).toBe(false);
   });
 

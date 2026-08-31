@@ -4,7 +4,7 @@
  * Objectif : eliminer les reprises pour cause de champ oublie, de reference mal
  * formee ou d'incoherence entre l'en-tete et le contenu du document.
  */
-import { ALL_MOC_CODES, isMocCode } from "./moc";
+import { ALL_MOC_IDS, isKnownMoc } from "./moc";
 import { normalizeExtractedText } from "./requirements";
 import type { CheckResult, DocumentHeader } from "./types";
 
@@ -279,9 +279,11 @@ export function checkHeader(
   if (header.moc) {
     // On capture la suite complete de chiffres : "MC12" doit etre signale comme
     // invalide, pas interprete comme "MC1" suivi d'un 2.
-    const codes = [...header.moc.matchAll(/M(?:C|oC)\s*\.?\s*(\d+)/gi)].map((m) => m[1]);
-    const normalized = codes.map((digits) => `MC${digits}`);
-    const invalid = normalized.filter((c) => !isMocCode(c));
+    // "MC12" doit etre signale comme invalide, pas lu comme "MC1" suivi de 2.
+    const normalized = [...header.moc.matchAll(/M(?:C|oC)\s*\.?\s*(\d+|[A-Z])\b/gi)].map(
+      (m) => m[1].toUpperCase(),
+    );
+    const invalid = normalized.filter((id) => !isKnownMoc(id) && !/^[A-Z]$/.test(id));
     if (!normalized.length) {
       results.push({
         id: "header.moc.unreadable",
@@ -295,7 +297,7 @@ export function checkHeader(
         id: "header.moc.invalid",
         status: "error",
         label: "Code MoC invalide",
-        detail: `Codes non reconnus : ${invalid.join(", ")}. Valeurs admises : ${ALL_MOC_CODES.join(", ")}.`,
+        detail: `Codes non reconnus : ${invalid.join(", ")}. Valeurs admises : ${ALL_MOC_IDS.join(", ")}, ou une lettre.`,
         location: { field: "moc" },
       });
     }

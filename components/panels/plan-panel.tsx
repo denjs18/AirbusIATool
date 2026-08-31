@@ -17,6 +17,7 @@ import type { ParsedPlan, RequirementKind } from "@/lib/types";
 
 const KIND_LABEL: Record<RequirementKind, string> = {
   CS: "Paragraphes CS-25",
+  JAR: "Paragraphes JAR-25",
   AMC: "AMC",
   FAR: "FAR / 14 CFR",
   SC: "Special Conditions",
@@ -164,7 +165,7 @@ export default function PlanPanel({
                         (occurrence) => occurrence.id === requirement.id,
                       );
                       const moc = [
-                        ...new Set(occurrences.flatMap((occurrence) => occurrence.mocCodes)),
+                        ...new Set(occurrences.flatMap((occurrence) => occurrence.mocIds)),
                       ].sort();
                       const pages = [
                         ...new Set(occurrences.map((occurrence) => occurrence.page)),
@@ -181,7 +182,7 @@ export default function PlanPanel({
                         <tr key={requirement.id} className="border-t" style={{ borderColor: "var(--border)" }}>
                           <td className="py-2 font-mono text-xs font-semibold">{requirement.id}</td>
                           <td className="py-2">{requirement.kind}</td>
-                          <td className="py-2">{requirement.amendment ?? "-"}</td>
+                          <td className="py-2">{requirement.qualifier ?? "-"}</td>
                           <td className="py-2 font-mono text-xs">
                             {moc.length ? moc.join(" ") : <span className="text-warn-500">-</span>}
                           </td>
@@ -213,8 +214,8 @@ function renderRequirementsCsv(plan: ParsedPlan): string {
       [
         escape(requirement.id),
         escape(requirement.kind),
-        escape(requirement.amendment ?? ""),
-        escape([...new Set(occurrences.flatMap((o) => o.mocCodes))].sort().join(" ")),
+        escape(requirement.qualifier ?? ""),
+        escape([...new Set(occurrences.flatMap((o) => o.mocIds))].sort().join(" ")),
         escape([...new Set(occurrences.map((o) => o.page))].join(", ")),
         escape(
           [...new Set(occurrences.map((o) => o.section).filter(Boolean))].join(" | "),
