@@ -31,13 +31,13 @@ const TEXT_A = "The enclosed document covers this requirement alone in §x.x.";
 
 const TPL_AB: BlockTemplate = {
   documentType: "SYDMP",
-  requirementIds: [A.id, B.id],
+  requirements: [A, B],
   text: TEXT_AB,
   source: "CVS-SyDMP issue 1",
 };
 const TPL_A: BlockTemplate = {
   documentType: "SYDMP",
-  requirementIds: [A.id],
+  requirements: [A],
   text: TEXT_A,
 };
 
@@ -124,20 +124,24 @@ describe("bibliotheque", () => {
     expect(documentTypesOf(wider)).toEqual(["SSA", "SYDMP"]);
   });
 
-  it("liste les exigences qu'une famille sait couvrir", () => {
-    expect(knownRequirementsFor(library, "SyDMP").sort()).toEqual([A.id, B.id].sort());
+  it("liste les exigences qu'un document sait couvrir, avec leur citation", () => {
+    const known = knownRequirementsFor(library, "SyDMP");
+    expect(known.map((r) => r.id).sort()).toEqual([A.id, B.id].sort());
+    // Le qualifieur voyage avec l'exigence : sans lui, la coversheet citerait
+    // le mauvais amendement.
+    expect(known.find((r) => r.id === A.id)?.qualifier).toBe("Amdt 23");
   });
 
   it("remplace un bloc type de meme jeu d'exigences", () => {
     const updated = mergeTemplates(library, [{ ...TPL_AB, text: "nouvelle redaction" }]);
     expect(templatesFor(updated, "SyDMP")).toHaveLength(2);
     expect(
-      templatesFor(updated, "SyDMP").find((t) => t.requirementIds.length === 2)?.text,
+      templatesFor(updated, "SyDMP").find((t) => t.requirements.length === 2)?.text,
     ).toBe("nouvelle redaction");
   });
 
   it("considere un bloc identique quel que soit l'ordre des exigences", () => {
-    const reversed = { ...TPL_AB, requirementIds: [B.id, A.id] };
+    const reversed = { ...TPL_AB, requirements: [B, A] };
     expect(mergeTemplates(library, [reversed]).templates).toHaveLength(2);
   });
 
@@ -148,7 +152,7 @@ describe("bibliotheque", () => {
   it("capitalise des blocs montes a la main", () => {
     const blocks = [{ requirements: [A, B], mocIds: [], justification: "redige" }];
     const learned = learnFromBlocks("SyDMP", blocks, "CVS-1");
-    expect(learned[0].requirementIds).toEqual([A.id, B.id]);
+    expect(learned[0].requirements.map((r) => r.id)).toEqual([A.id, B.id]);
     expect(learned[0].text).toBe("redige");
   });
 
@@ -160,7 +164,7 @@ describe("bibliotheque", () => {
 
   it("valide la forme d'une bibliotheque", () => {
     expect(isTemplateLibrary({ templates: [TPL_AB] })).toBe(true);
-    expect(isTemplateLibrary({ templates: [{ documentType: "X", requirementIds: [1] }] })).toBe(false);
+    expect(isTemplateLibrary({ templates: [{ documentType: "X", requirements: [1] }] })).toBe(false);
     expect(isTemplateLibrary(null)).toBe(false);
   });
 });

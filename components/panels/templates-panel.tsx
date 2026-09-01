@@ -3,7 +3,7 @@
 /**
  * Onglet Parametres : bibliotheque de blocs types.
  *
- * On y declare, pour chaque famille de coversheet, quelles exigences vont
+ * On y declare, pour chaque document de certification, quelles exigences vont
  * ensemble et quelle redaction leur correspond. C'est ce parametrage qui rend
  * la preparation d'une coversheet quasi automatique : le texte est deja ecrit,
  * seuls les reperes de paragraphe restent a pointer.
@@ -15,16 +15,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Empty, Metric } from "../ui";
 import { downloadText, safeFileName } from "@/lib/download";
 import { loadLibrary, saveLibrary } from "@/lib/library-storage";
-import { dedupeRequirements, extractOccurrencesFromPage } from "@/lib/requirements";
+import { parseRequirementList } from "@/lib/requirements";
 import type { WorkbookIssue } from "@/lib/workbook";
 import {
+  coerceLibrary,
   countPlaceholders,
   documentTypesOf,
   EMPTY_LIBRARY,
   forgetTemplate,
-  isTemplateLibrary,
   mergeTemplates,
   normalizeDocumentType,
+  requirementIdsOf,
   templatesFor,
   type BlockTemplate,
   type TemplateLibrary,
@@ -50,10 +51,7 @@ export default function TemplatesPanel() {
   const current = documentType ? templatesFor(library, documentType) : library.templates;
 
   /** Les exigences saisies sont normalisees par le meme parseur que l'ACP. */
-  const parsed = useMemo(
-    () => dedupeRequirements(extractOccurrencesFromPage(requirementsInput, 1)),
-    [requirementsInput],
-  );
+  const parsed = useMemo(() => parseRequirementList(requirementsInput), [requirementsInput]);
 
   function persist(next: TemplateLibrary) {
     setLibrary(next);
@@ -62,7 +60,7 @@ export default function TemplatesPanel() {
 
   function submit() {
     if (!documentType.trim()) {
-      setError("Indiquez la famille de document (SyDMP, SSA, VVS...).");
+      setError("Indiquez le document de certification (SyDMP, SSA, VVS...).");
       return;
     }
     if (!parsed.length) {
@@ -74,7 +72,7 @@ export default function TemplatesPanel() {
       mergeTemplates(editing ? forgetTemplate(library, editing) : library, [
         {
           documentType: normalizeDocumentType(documentType),
-          requirementIds: parsed.map((requirement) => requirement.id),
+          requirements: parsed,
           text: text.trim() || undefined,
         },
       ]),
@@ -112,13 +110,13 @@ export default function TemplatesPanel() {
     try {
       const raw =
         typeof source === "string" ? await (await fetch(source)).text() : await source.text();
-      const parsedFile: unknown = JSON.parse(raw);
-      if (!isTemplateLibrary(parsedFile)) {
+      const imported = coerceLibrary(JSON.parse(raw));
+      if (!imported) {
         throw new Error(
-          'Format inattendu. Attendu : { "templates": [ { "documentType": "SyDMP", "requirementIds": ["CS 25.671(a)"], "text": "..." } ] }',
+          'Format inattendu. Attendu : { "templates": [ { "documentType": "SyDMP", "requirements": ["CS 25.671(a)"], "text": "..." } ] }',
         );
       }
-      persist(mergeTemplates(library, parsedFile.templates));
+      persist(mergeTemplates(library, imported.templates));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Fichier illisible.");
     }
@@ -128,7 +126,7 @@ export default function TemplatesPanel() {
     <div className="flex flex-col gap-5">
       <Card
         title="Bibliotheque de blocs types"
-        subtitle="Pour chaque famille de coversheet : quelles exigences vont ensemble, et la redaction qui leur correspond."
+        subtitle="Une ligne par exigence ou groupe d'exigences, pour un seul document de certification."
         actions={
           <>
             <a
@@ -189,11 +187,11 @@ export default function TemplatesPanel() {
         }
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Metric label="Familles de documents" value={types.length} />
+          <Metric label="Documents de certification" value={types.length} />
           <Metric label="Blocs types" value={library.templates.length} />
           <Metric
             label="Blocs a plusieurs exigences"
-            value={library.templates.filter((t) => t.requirementIds.length > 1).length}
+            value={library.templates.filter((t) => t.requirements.length > 1).length}
           />
           <Metric
             label="Blocs sans redaction"
@@ -266,16 +264,16 @@ export default function TemplatesPanel() {
       >
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">Famille de document</span>
+            <span className="font-medium">Document de certification</span>
             <input
               value={documentType}
               onChange={(event) => setDocumentType(event.target.value)}
               placeholder="SyDMP"
-              list="familles-connues"
+              list="documents-connus"
               className="max-w-xs rounded-md border px-2 py-1 font-mono text-xs"
               style={{ borderColor: "var(--border)", background: "var(--surface)" }}
             />
-            <datalist id="familles-connues">
+            <datalist id="documents-connus">
               {types.map((type) => (
                 <option key={type} value={type} />
               ))}
@@ -334,7 +332,7 @@ export default function TemplatesPanel() {
           <ul className="flex flex-col gap-2">
             {current.map((template) => (
               <li
-                key={`${template.documentType}-${template.requirementIds.join("|")}`}
+                key={`${template.documentType}-${requirementIdsOf(template).join("|")}`}
                 className="rounded-md border p-3"
                 style={{ borderColor: "var(--border)" }}
               >
@@ -344,7 +342,7 @@ export default function TemplatesPanel() {
                       {template.documentType}
                     </span>
                     <span className="ml-2 font-mono text-xs">
-                      {template.requirementIds.join(" + ")}
+                      {requirementIdsOf(template).join(" + ")}
                     </span>
                   </div>
                   <div className="flex gap-2">
@@ -353,7 +351,9 @@ export default function TemplatesPanel() {
                       onClick={() => {
                         setEditing(template);
                         setDocumentType(template.documentType);
-                        setRequirementsInput(template.requirementIds.join(", "));
+                        setRequirementsInput(
+                          template.requirements.map((r) => r.raw || r.id).join(" ; "),
+                        );
                         setText(template.text ?? "");
                       }}
                     >

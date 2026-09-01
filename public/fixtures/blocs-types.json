@@ -3,24 +3,32 @@
   "templates": [
     {
       "documentType": "SYDMP",
-      "requirementIds": [
-        "CS 25.671(a)",
-        "JAR 25.1301(a)"
+      "requirements": [
+        "CS 25.0671(a) amdt. 23",
+        "JAR 25.1301(a) ch. 11"
       ],
       "text": "The enclosed SyDMP is the master plan describing the development assurance\nactivities to be performed for the change requests listed in §x.x, which are\nconsidered in the current certification projects.\n\nThe SyDMP references in §x.x the other plans describing the activities to be\nperformed, and provides in §x.x the list of applicable rules and the\ndevelopment assurance referential.",
       "source": "CVS-SYDMP fictive issue 1"
     },
     {
       "documentType": "SYDMP",
-      "requirementIds": [
-        "CS 25.671(a)"
+      "requirements": [
+        "CS 25.0671(a) amdt. 23"
       ],
       "text": "The enclosed SyDMP describes in §x.x the development assurance activities\napplicable to this requirement, and justifies in §x.x the deviations to the\napplicable processes.",
       "source": "CVS-SYDMP fictive issue 1"
     },
     {
       "documentType": "SSA",
-      "requirementIds": [
+      "requirements": [
+        "CS 25.0671(a) amdt. 23"
+      ],
+      "text": "The enclosed safety assessment demonstrates in §x.x that the failure\nconditions associated with this requirement are classified consistently with\nthe severity definitions recalled in §x.x.",
+      "source": "CVS-SSA fictive issue 4"
+    },
+    {
+      "documentType": "SSA",
+      "requirements": [
         "CS 25.671(c)(1)",
         "CS 25.1309(b)"
       ],
@@ -29,7 +37,7 @@
     },
     {
       "documentType": "SSA",
-      "requirementIds": [
+      "requirements": [
         "CS 25.672"
       ],
       "text": "Chapter §x.x of the safety assessment provides the list of alerting and\ndemonstrates the adequate level of probability.",
@@ -37,9 +45,9 @@
     },
     {
       "documentType": "VVS",
-      "requirementIds": [
+      "requirements": [
         "CS 25.143",
-        "CS 25.671"
+        "CS 25.671 amdt 27"
       ],
       "text": "The enclosed verification summary shows compliance to the requirements quoted\nabove by stating the correctness of the laboratory tests (§x.x) and the good\nfunctioning in flight test (§x.x).",
       "source": "CVS-VVS fictive issue 2"

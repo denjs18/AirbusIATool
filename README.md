@@ -1,6 +1,6 @@
 # Outillage des tâches de certification — ATA 27
 
-Prototype d'assistance à la rédaction des documents de certification. Il automatise cinq
+Prototype d'assistance à la rédaction des documents de certification. Il automatise quatre
 tâches chronophages à faible valeur ajoutée, **sans** rédiger le contenu technique à la
 place des ingénieurs de certification.
 
@@ -13,8 +13,8 @@ place des ingénieurs de certification.
 | Module | Tâche automatisée | Ce que produit l'outil |
 | --- | --- | --- |
 | 1. Plan de certification | Structurer l'information d'un ACP / OCP de plusieurs centaines de pages | Liste des exigences citées (CS-25, JAR-25, AMC, SC, CRI, ESF) avec page, section et moyens de conformité — export CSV |
-| 2. Préparer une coversheet | Monter la coversheet d'un document de certification | On désigne le document et on coche les exigences à couvrir ; l'outil restitue la rédaction mémorisée pour chaque combinaison, `§x.x` à pointer — export Markdown |
-| Paramètres | Tenir la bibliothèque de blocs types | Modèle Excel à télécharger, à compléter et à recharger : par famille de coversheet, quelles exigences vont ensemble et la rédaction qui leur correspond |
+| 2. Préparer une coversheet | Monter la coversheet d'un document de certification | On choisit le document parmi ceux du classeur, on coche ses exigences, on valide ; l'outil restitue la rédaction mémorisée pour la combinaison retenue, `§x.x` à pointer — export Markdown |
+| Paramètres | Tenir la bibliothèque de blocs types | Modèle Excel à télécharger, à compléter et à recharger : par document de certification, quelles exigences vont ensemble et la rédaction qui leur correspond |
 | 3. Cohérence des renvois | Vérifier qu'un chapitre cité correspond bien au contenu | Contrôle de chaque renvoi contre la structure réelle du PDF fourni : chapitre inexistant, titre divergent, issue obsolète |
 | 4. Recoupement ACP ↔ coversheets | Croiser les exigences de l'ACP avec les documents qui les couvrent | Exigences non couvertes, couvertures hors plan, doublons, MoC divergents, taux de couverture — export CSV |
 
@@ -24,15 +24,38 @@ Le tableau de conformité de l'ACP rattache chaque exigence à un document de ce
 On écrit **une coversheet par document**, et elle rassemble toutes les exigences que ce
 document traite, groupées par bloc de justification quand elles vont ensemble.
 
+C'est le document, et non l'exigence, qui porte la rédaction. Une exigence servie à la
+fois par la SSA et par le SyDMP appelle deux justifications différentes : elle occupe donc
+**deux lignes distinctes** du classeur, et l'outil restitue un texte différent selon le
+document choisi.
+
+### Le parcours du module 2
+
+1. **Le document de certification.** L'outil affiche ceux que le classeur déclare — pas
+   ceux de l'ACP : la coversheet se prépare à partir de ce qui a déjà été rédigé.
+2. **Ses exigences.** Ouvrir un document montre toutes les exigences que le classeur lui
+   rattache, avec leur citation complète (`CS 25.671(a) Amdt 23`). On coche celles que ce
+   standard couvre.
+3. **Valider.** Rien n'est produit avant. La trame apparaît alors, blocs restitués et
+   `§x.x` comptés.
+
+Une combinaison qu'aucune ligne ne déclare ne produit pas de texte : elle est signalée
+comme telle, ce qui dit exactement quelle ligne manque au classeur.
+
 ### La rédaction est restituée, jamais inventée
 
 D'un standard au suivant, une coversheet reprend la même rédaction : seuls les paragraphes
 cités changent, parce que le document joint a été réédité.
 
 L'onglet **Paramètres** tient une bibliothèque de **blocs types** (`lib/templates.ts`) :
-pour chaque famille de coversheet (SyDMP, SSA, VVS…), quelles exigences vont ensemble et
-quelle rédaction leur correspond. Les endroits où un chapitre devra être pointé s'écrivent
-`§x.x`.
+pour chaque document de certification (SyDMP, SSA, VVS…), quelles exigences vont ensemble
+et quelle rédaction leur correspond. Les endroits où un chapitre devra être pointé
+s'écrivent `§x.x`.
+
+Un bloc conserve les références **entières**, qualifieur compris : c'est la ligne du
+classeur qui dicte la citation produite, donc `CS 25.671(a) Amdt 23` ressort tel qu'il a
+été saisi. Ne garder que l'identifiant ferait citer le mauvais amendement sans que rien ne
+le signale.
 
 Au moment de préparer une coversheet, l'outil confronte la sélection à cette bibliothèque
 et restitue le texte correspondant. **Un bloc type ne s'applique que si toutes ses
@@ -51,11 +74,20 @@ Excel que les équipes remplissent et rechargent à l'ouverture.
 
 L'onglet Paramètres propose le modèle en téléchargement (`public/modele-blocs-types.xlsx`,
 produit par `npm run modele`) : une notice, une feuille **Blocs types** à compléter, une
-feuille d'exemples fictifs. Une ligne par bloc de justification :
+feuille d'exemples fictifs.
 
-| Famille de coversheet | Exigences | Moyens de conformité | Rédaction | Coversheet source |
+**Une ligne = une exigence, ou un groupe d'exigences, pour un seul document de
+certification.**
+
+| Document de certification | Exigences | Moyens de conformité | Rédaction | Coversheet source |
 | --- | --- | --- | --- | --- |
-| SYDMP | CS 25.671(a) ; JAR 25.1301(a) | 0 | The enclosed SyDMP… §x.x… | CVS-SYDMP issue 1 |
+| SYDMP | CS 25.671(a) Amdt 23 ; JAR 25.1301(a) ch. 11 | 0 | The enclosed SyDMP… §x.x… | CVS-SYDMP issue 1 |
+| SYDMP | CS 25.671(a) Amdt 23 | 0 | The enclosed SyDMP describes… §x.x… | CVS-SYDMP issue 1 |
+| SSA | CS 25.671(a) Amdt 23 | 3 | The enclosed safety assessment… §x.x… | CVS-SSA issue 4 |
+
+Les deux premières lignes montrent la même exigence traitée seule puis accompagnée ; la
+troisième, la même exigence reprise par un autre document. Trois lignes, trois
+rédactions.
 
 Le classeur est lu dans le navigateur (`lib/workbook-browser.ts`) : il ne quitte pas le
 poste. La lecture est **indulgente sur la forme** — ordre des colonnes libre, accents et
@@ -76,8 +108,8 @@ Il se range donc avec elles, dans le référentiel documentaire — pas dans le 
 
 Trois choix d'architecture, qui répondent aux points de blocage habituels :
 
-**Le moteur est déterministe, pas génératif.** Les cinq contrôles reposent sur de
-l'analyse de texte et des règles explicites, couvertes par 103 tests automatisés. À
+**Le moteur est déterministe, pas génératif.** Les contrôles reposent sur de
+l'analyse de texte et des règles explicites, couvertes par 152 tests automatisés. À
 données identiques, le résultat est identique. L'IA générative n'intervient dans aucune
 vérification ; sa place naturelle est en assistance ponctuelle à la reformulation, en
 périphérie de l'outil et non dans son moteur.
@@ -133,7 +165,7 @@ coversheet (CS 25.703), coversheet hors plan (CS 25.1329), doublon de couverture
 ## Tests
 
 ```bash
-npm test             # 103 tests : logique métier + intégration sur les PDF réels
+npm test             # 152 tests : logique métier + intégration sur les PDF réels
 ```
 
 `tests/integration.test.ts` rejoue la chaîne complète sur les PDF fictifs et vérifie que
@@ -145,7 +177,7 @@ Deux smoke tests navigateur :
 ```bash
 npm run build && npx next start -p 3210
 npm install --no-save playwright
-node scripts/smoke.mjs          # enchaînement réel des cinq modules
+node scripts/smoke.mjs          # enchaînement réel des quatre modules
 node scripts/smoke-legacy.mjs   # compatibilité navigateur ancien
 ```
 

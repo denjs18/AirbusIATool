@@ -29,7 +29,10 @@ describe("parseWorkbookRows", () => {
     expect(library.templates).toHaveLength(1);
     expect(library.templates[0]).toMatchObject({
       documentType: "SYDMP",
-      requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"],
+      requirements: [
+        expect.objectContaining({ id: "CS 25.671(a)" }),
+        expect.objectContaining({ id: "JAR 25.1301(a)" }),
+      ],
       text: "Voir §x.x.",
       mocIds: ["0"],
       source: "CVS-1",
@@ -43,7 +46,10 @@ describe("parseWorkbookRows", () => {
       "CS 25.671(a)\nJAR 25.1301(a)",
     ]) {
       const { library } = parseWorkbookRows([HEADERS, row("SSA", cell, "", "texte")]);
-      expect(library.templates[0].requirementIds).toEqual(["CS 25.671(a)", "JAR 25.1301(a)"]);
+      expect(library.templates[0].requirements.map((r) => r.id)).toEqual([
+        "CS 25.671(a)",
+        "JAR 25.1301(a)",
+      ]);
     }
   });
 
@@ -54,7 +60,7 @@ describe("parseWorkbookRows", () => {
     ]);
     expect(library.templates[0]).toMatchObject({
       documentType: "SSA",
-      requirementIds: ["CS 25.672"],
+      requirements: [expect.objectContaining({ id: "CS 25.672" })],
       text: "Voir §x.x.",
     });
   });
@@ -78,14 +84,14 @@ describe("parseWorkbookRows", () => {
     expect(issues).toEqual([]);
   });
 
-  it("signale une famille absente avec son numero de ligne", () => {
+  it("signale un document de certification absent avec son numero de ligne", () => {
     const { issues, library } = parseWorkbookRows([
       HEADERS,
       row("", "CS 25.672", "", "texte"),
     ]);
     expect(library.templates).toHaveLength(0);
     expect(issues[0].row).toBe(2);
-    expect(issues[0].message).toContain("Famille");
+    expect(issues[0].message).toContain("Document de certification");
   });
 
   it("signale une exigence non reconnue plutot que de l'ignorer", () => {

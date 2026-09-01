@@ -17,7 +17,7 @@ import type { ParsedPlan } from "@/lib/types";
 
 const TABS = [
   { id: "plan", label: "1. Plan de certification", hint: "Extraction des exigences citees" },
-  { id: "coversheets", label: "2. Preparer une coversheet", hint: "Exigences puis document de certification" },
+  { id: "coversheets", label: "2. Preparer une coversheet", hint: "Document de certification puis exigences" },
   { id: "coherence", label: "3. Coherence des renvois", hint: "Chapitre cite / contenu reel" },
   { id: "crosscheck", label: "4. Recoupement", hint: "ACP / coversheets emises" },
   { id: "templates", label: "Parametres", hint: "Blocs types et redactions memorisees" },
@@ -60,7 +60,7 @@ export default function Workspace() {
       </nav>
 
       {tab === "plan" && <PlanPanel plan={plan} onPlan={setPlan} />}
-      {tab === "coversheets" && <CoversheetsPanel plan={plan} onPlan={setPlan} />}
+      {tab === "coversheets" && <CoversheetsPanel plan={plan} />}
       {tab === "coherence" && <CoherencePanel />}
       {tab === "crosscheck" && <CrossCheckPanel plan={plan} onPlan={setPlan} />}
       {tab === "templates" && <TemplatesPanel />}

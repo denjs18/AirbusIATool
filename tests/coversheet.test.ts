@@ -7,7 +7,11 @@ import {
   TO_BE_COMPLETED,
 } from "../lib/coversheet";
 import { applyTemplates, EMPTY_LIBRARY, mergeTemplates } from "../lib/templates";
-import { dedupeRequirements, extractOccurrencesFromPage } from "../lib/requirements";
+import {
+  dedupeRequirements,
+  extractOccurrencesFromPage,
+  parseRequirementList,
+} from "../lib/requirements";
 
 const SELECTION = dedupeRequirements(
   extractOccurrencesFromPage(
@@ -50,9 +54,22 @@ describe("formatRequirementCitation", () => {
 describe("formatGroupHeading", () => {
   it("cite toutes les exigences d'un bloc sur une ligne", () => {
     const groups = groupsOf([
-      { documentType: "SSA", requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"] },
+      {
+        documentType: "SSA",
+        requirements: parseRequirementList("CS 25.0671(a) amdt. 23 ; JAR 25.1301(a) ch. 11"),
+      },
     ]);
     expect(formatGroupHeading(groups[0])).toBe("CS 25.671(a) Amdt 23, JAR 25.1301(a) ch. 11");
+  });
+});
+
+describe("moyens de conformite absents", () => {
+  it("reclame le moyen de conformite au lieu de laisser un blanc dans la phrase", () => {
+    const markdown = renderCoversheetMarkdown(
+      buildCoversheet(groupsOf(), { ...OPTIONS, mocIds: [] }),
+    );
+    expect(markdown).toContain(`used as ${TO_BE_COMPLETED} for compliance demonstration`);
+    expect(markdown).toContain("- Moyens de conformite du document.");
   });
 });
 
@@ -66,7 +83,10 @@ describe("buildCoversheet", () => {
 
   it("rassemble les exigences groupees dans un meme bloc", () => {
     const coversheet = buildCoversheet(
-      groupsOf([{ documentType: "SSA", requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"] }]),
+      groupsOf([{
+        documentType: "SSA",
+        requirements: parseRequirementList("CS 25.0671(a) amdt. 23 ; JAR 25.1301(a) ch. 11"),
+      }]),
       OPTIONS,
     );
     expect(coversheet.groups).toHaveLength(2);
@@ -99,7 +119,10 @@ describe("buildCoversheet", () => {
 describe("renderCoversheetMarkdown", () => {
   const markdown = renderCoversheetMarkdown(
     buildCoversheet(
-      groupsOf([{ documentType: "SSA", requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"] }]),
+      groupsOf([{
+        documentType: "SSA",
+        requirements: parseRequirementList("CS 25.0671(a) amdt. 23 ; JAR 25.1301(a) ch. 11"),
+      }]),
       OPTIONS,
     ),
   );

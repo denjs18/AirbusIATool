@@ -6,21 +6,34 @@
  * L'outil ne redige donc rien : il restitue le texte deja ecrit, avec ses
  * reperes de paragraphe laisses en blanc.
  *
- * Un bloc type associe un jeu d'exigences a son texte. Le regroupement et la
- * redaction ne sont pas deux notions distinctes : dire que deux exigences vont
- * ensemble, c'est dire qu'elles partagent une justification.
+ * Un bloc type associe un jeu d'exigences a son texte, pour un seul document
+ * de certification. Le regroupement et la redaction ne sont pas deux notions
+ * distinctes : dire que deux exigences vont ensemble, c'est dire qu'elles
+ * partagent une justification.
+ *
+ * Une meme exigence traitee par deux documents donne deux blocs distincts :
+ * la SSA et le SyDMP n'en disent pas la meme chose, et c'est le document qui
+ * porte la redaction, pas l'exigence.
  *
  * Le texte depend de la combinaison retenue : les exigences A et B ensemble
  * appellent une redaction, l'exigence A seule en appelle une autre. Un bloc
  * type ne s'applique donc que si toutes ses exigences sont selectionnees.
  */
+import { parseRequirementList, sortRequirements } from "./requirements";
 import type { MocId, RequirementGroup, RequirementRef } from "./types";
 
 export interface BlockTemplate {
-  /** Famille de document a laquelle le bloc appartient, ex. "SyDMP". */
+  /** Document de certification auquel le bloc appartient, ex. "SyDMP". */
   documentType: string;
-  /** Exigences couvertes par ce bloc, toutes requises pour qu'il s'applique. */
-  requirementIds: string[];
+  /**
+   * Exigences couvertes par ce bloc, toutes requises pour qu'il s'applique.
+   *
+   * Les references sont conservees entieres, qualifieur et appendices compris :
+   * c'est ce bloc qui dicte la citation produite dans la coversheet, donc
+   * "CS 25.671(a) Amdt 23" doit ressortir tel qu'il a ete saisi. L'identifiant
+   * seul ne sert qu'au rapprochement.
+   */
+  requirements: RequirementRef[];
   /** Redaction memorisee, reperes de paragraphe compris. */
   text?: string;
   /**
@@ -39,13 +52,18 @@ export interface TemplateLibrary {
 
 export const EMPTY_LIBRARY: TemplateLibrary = { templates: [] };
 
-/** Normalise une famille de document : la casse ne doit pas separer deux blocs. */
+/** Normalise un document de certification : la casse ne doit pas separer deux blocs. */
 export function normalizeDocumentType(documentType: string): string {
   return documentType.trim().toUpperCase();
 }
 
+/** Identifiants des exigences d'un bloc, cle de rapprochement. */
+export function requirementIdsOf(template: BlockTemplate): string[] {
+  return template.requirements.map((requirement) => requirement.id);
+}
+
 function templateKey(template: BlockTemplate): string {
-  const ids = [...template.requirementIds].sort().join("|");
+  const ids = requirementIdsOf(template).sort().join("|");
   return `${normalizeDocumentType(template.documentType)}::${ids}`;
 }
 
@@ -63,30 +81,41 @@ export function countPlaceholders(text: string | undefined): number {
   return text.match(PLACEHOLDER_PATTERN)?.length ?? 0;
 }
 
-/** Familles de documents presentes dans la bibliotheque, triees. */
+/** Documents de certification presents dans la bibliotheque, tries. */
 export function documentTypesOf(library: TemplateLibrary): string[] {
   return [...new Set(library.templates.map((t) => normalizeDocumentType(t.documentType)))].sort();
 }
 
-/** Blocs types d'une famille de documents. */
+/** Blocs types d'un document de certification. */
 export function templatesFor(library: TemplateLibrary, documentType: string): BlockTemplate[] {
   const type = normalizeDocumentType(documentType);
   return library.templates.filter((t) => normalizeDocumentType(t.documentType) === type);
 }
 
 /**
- * Toutes les exigences qu'une famille de coversheet sait couvrir.
- * Sert a proposer la bonne liste au moment de preparer une coversheet.
+ * Toutes les exigences qu'un document de certification sait couvrir.
+ *
+ * C'est la liste proposee au moment de preparer sa coversheet. Une exigence
+ * citee par plusieurs blocs n'y figure qu'une fois : la citation retenue pour
+ * l'affichage est la premiere rencontree, mais elle n'engage rien, car chaque
+ * bloc produit cite ses propres references.
  */
 export function knownRequirementsFor(
   library: TemplateLibrary,
   documentType: string,
-): string[] {
-  const ids = new Set<string>();
+): RequirementRef[] {
+  const byId = new Map<string, RequirementRef>();
   for (const template of templatesFor(library, documentType)) {
-    for (const id of template.requirementIds) ids.add(id);
+    for (const requirement of template.requirements) {
+      const kept = byId.get(requirement.id);
+      // A defaut de qualifieur sur la premiere rencontre, on retient celle qui
+      // en porte un : elle est plus proche de la citation attendue.
+      if (!kept || (!kept.qualifier && requirement.qualifier)) {
+        byId.set(requirement.id, requirement);
+      }
+    }
   }
-  return [...ids];
+  return sortRequirements([...byId.values()]);
 }
 
 /**
@@ -101,7 +130,7 @@ export function findTemplate(
 ): BlockTemplate | undefined {
   const wanted = [...requirementIds].sort().join("|");
   return templatesFor(library, documentType).find(
-    (template) => [...template.requirementIds].sort().join("|") === wanted,
+    (template) => requirementIdsOf(template).sort().join("|") === wanted,
   );
 }
 
@@ -148,6 +177,9 @@ export interface TemplateMatch {
  * differentes. Les blocs les plus larges sont essayes d'abord, sinon {A}
  * consommerait A avant que {A, B} n'ait sa chance.
  *
+ * Un bloc retenu cite ses propres references, pas celles de la selection : la
+ * coversheet reprend ainsi mot pour mot ce qui a ete saisi dans le classeur.
+ *
  * Les exigences sans bloc type connu forment chacune leur propre bloc, sans
  * texte : l'outil ne redige pas a la place du redacteur.
  */
@@ -157,21 +189,21 @@ export function applyTemplates(
   library: TemplateLibrary,
 ): TemplateMatch {
   const position = new Map(requirements.map((requirement, index) => [requirement.id, index]));
-  const remaining = new Map(requirements.map((requirement) => [requirement.id, requirement]));
+  const remaining = new Set(requirements.map((requirement) => requirement.id));
 
   const candidates = templatesFor(library, documentType)
     .slice()
-    .sort((a, b) => b.requirementIds.length - a.requirementIds.length);
+    .sort((a, b) => b.requirements.length - a.requirements.length);
 
   const blocks: AppliedBlock[] = [];
 
   for (const template of candidates) {
-    const complete = template.requirementIds.every((id) => remaining.has(id));
+    const complete = template.requirements.every((requirement) => remaining.has(requirement.id));
     if (!complete) continue;
 
-    const picked = template.requirementIds
-      .map((id) => remaining.get(id)!)
-      .sort((a, b) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0));
+    const picked = [...template.requirements].sort(
+      (a, b) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0),
+    );
     for (const requirement of picked) remaining.delete(requirement.id);
 
     blocks.push({
@@ -182,7 +214,7 @@ export function applyTemplates(
     });
   }
 
-  const uncovered = [...remaining.values()];
+  const uncovered = requirements.filter((requirement) => remaining.has(requirement.id));
   for (const requirement of uncovered) {
     blocks.push({ requirements: [requirement], mocIds: [] });
   }
@@ -207,26 +239,71 @@ export function learnFromBlocks(
 ): BlockTemplate[] {
   return blocks.map((block) => ({
     documentType: normalizeDocumentType(documentType),
-    requirementIds: block.requirements.map((requirement) => requirement.id),
+    requirements: block.requirements,
     text: block.justification,
     mocIds: block.mocIds.length ? block.mocIds : undefined,
     source,
   }));
 }
 
+/**
+ * Relit une bibliotheque venue d'un fichier JSON.
+ *
+ * Trois formes sont acceptees pour les exigences d'un bloc : les references
+ * completes telles que l'outil les exporte, des citations en clair pour un
+ * fichier ecrit a la main ("CS 25.671(a) Amdt 23"), et le champ
+ * "requirementIds" des exports produits avant que les blocs ne portent leurs
+ * references entieres. Un ancien fichier est relu plutot que rejete, quitte a
+ * ne pas retrouver un qualifieur qu'il n'avait jamais enregistre.
+ *
+ * Renvoie undefined si la forme n'est pas exploitable du tout.
+ */
+export function coerceLibrary(value: unknown): TemplateLibrary | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = (value as { templates?: unknown }).templates;
+  if (!Array.isArray(candidate)) return undefined;
+
+  const templates: BlockTemplate[] = [];
+  for (const entry of candidate) {
+    if (typeof entry !== "object" || entry === null) return undefined;
+    const raw = entry as Record<string, unknown>;
+    if (typeof raw.documentType !== "string") return undefined;
+
+    const cited = Array.isArray(raw.requirements) ? raw.requirements : raw.requirementIds;
+    if (!Array.isArray(cited) || cited.length === 0) return undefined;
+
+    const requirements: RequirementRef[] = [];
+    for (const item of cited) {
+      if (typeof item === "string") {
+        // Citation en clair : relue par le meme analyseur que les documents,
+        // donc "CS 25.0671(a) amdt. 23" donne la meme exigence qu'ailleurs.
+        const parsed = parseRequirementList(item);
+        if (parsed.length !== 1) return undefined;
+        requirements.push(parsed[0]);
+      } else if (
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as RequirementRef).id === "string"
+      ) {
+        requirements.push(item as RequirementRef);
+      } else {
+        return undefined;
+      }
+    }
+
+    templates.push({
+      documentType: raw.documentType,
+      requirements,
+      text: typeof raw.text === "string" ? raw.text : undefined,
+      mocIds: Array.isArray(raw.mocIds) ? raw.mocIds.map(String) : undefined,
+      source: typeof raw.source === "string" ? raw.source : undefined,
+    });
+  }
+
+  return { templates };
+}
+
 /** Verifie qu'une valeur inconnue a la forme attendue d'une bibliotheque. */
 export function isTemplateLibrary(value: unknown): value is TemplateLibrary {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as { templates?: unknown };
-  return (
-    Array.isArray(candidate.templates) &&
-    candidate.templates.every(
-      (template) =>
-        typeof template === "object" &&
-        template !== null &&
-        typeof (template as BlockTemplate).documentType === "string" &&
-        Array.isArray((template as BlockTemplate).requirementIds) &&
-        (template as BlockTemplate).requirementIds.every((id) => typeof id === "string"),
-    )
-  );
+  return coerceLibrary(value) !== undefined;
 }

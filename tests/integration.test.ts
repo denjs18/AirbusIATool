@@ -13,7 +13,12 @@ import { crossCheck } from "../lib/crosscheck";
 import { parseHeader } from "../lib/headers";
 import { parsePlan, planStats } from "../lib/parse-acp";
 import { isRegistryFile, registryToCoverage } from "../lib/registry";
-import { applyTemplates, countPlaceholders, isTemplateLibrary } from "../lib/templates";
+import {
+  applyTemplates,
+  coerceLibrary,
+  countPlaceholders,
+  knownRequirementsFor,
+} from "../lib/templates";
 import { extractPdfTextNode } from "./pdf-node";
 
 const FIXTURES = "public/fixtures";
@@ -158,17 +163,31 @@ describe("recoupement ACP / registre de coversheets", () => {
  */
 describe("blocs types fictifs et ACP fictif", () => {
   const plan = parsePlan(acpText);
-  const library = JSON.parse(readFileSync(`${FIXTURES}/blocs-types.json`, "utf8"));
+  const raw: unknown = JSON.parse(readFileSync(`${FIXTURES}/blocs-types.json`, "utf8"));
+  const library = coerceLibrary(raw);
 
   it("charge une bibliotheque valide", () => {
-    expect(isTemplateLibrary(library)).toBe(true);
+    expect(library).toBeDefined();
   });
 
   it("ne cite que des exigences que l'ACP produit reellement", () => {
     const planIds = new Set(plan.requirements.map((requirement) => requirement.id));
-    const cited = [...new Set(library.templates.flatMap((t: { requirementIds: string[] }) => t.requirementIds))];
-    const orphans = cited.filter((id) => !planIds.has(id as string));
+    const cited = [
+      ...new Set(library!.templates.flatMap((t) => t.requirements.map((r) => r.id))),
+    ];
+    const orphans = cited.filter((id) => !planIds.has(id));
     expect(orphans, `exigences absentes de l'ACP fictif : ${orphans.join(", ")}`).toEqual([]);
+  });
+
+  /**
+   * Le classeur porte le qualifieur, pas l'ACP : c'est lui qui dicte la
+   * citation produite. Une coversheet qui annoncerait le mauvais amendement
+   * serait fausse sans que rien ne le signale.
+   */
+  it("conserve le qualifieur cite dans la bibliotheque", () => {
+    const known = knownRequirementsFor(library!, "SYDMP");
+    expect(known.find((r) => r.id === "CS 25.671(a)")?.qualifier).toBe("Amdt 23");
+    expect(known.find((r) => r.id === "JAR 25.1301(a)")?.qualifier).toBe("ch. 11");
   });
 
   it("restitue une redaction differente selon la combinaison retenue", () => {
@@ -176,8 +195,8 @@ describe("blocs types fictifs et ACP fictif", () => {
     const a = byId.get("CS 25.671(a)")!;
     const b = byId.get("JAR 25.1301(a)")!;
 
-    const ensemble = applyTemplates("SYDMP", [a, b], library).blocks;
-    const seule = applyTemplates("SYDMP", [a], library).blocks;
+    const ensemble = applyTemplates("SYDMP", [a, b], library!).blocks;
+    const seule = applyTemplates("SYDMP", [a], library!).blocks;
 
     expect(ensemble).toHaveLength(1);
     expect(seule).toHaveLength(1);
@@ -187,7 +206,7 @@ describe("blocs types fictifs et ACP fictif", () => {
   });
 
   it("laisse des reperes de paragraphe a pointer dans chaque redaction", () => {
-    for (const template of library.templates as { text: string }[]) {
+    for (const template of library!.templates) {
       expect(countPlaceholders(template.text)).toBeGreaterThan(0);
     }
   });

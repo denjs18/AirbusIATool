@@ -358,6 +358,14 @@ export function groupByParagraph(
 }
 
 /** Tri de lecture : par nature puis par numero de paragraphe croissant. */
+/**
+ * Exigences citees dans un texte libre : cellule de tableau, ligne collee,
+ * saisie a la main. Meme lecture que dans un document, mais sur un fragment.
+ */
+export function parseRequirementList(text: string): RequirementRef[] {
+  return dedupeRequirements(extractOccurrencesFromPage(text, 1));
+}
+
 export function sortRequirements(refs: RequirementRef[]): RequirementRef[] {
   const kindOrder: RequirementKind[] = ["CS", "JAR", "AMC", "FAR", "SC", "CRI", "ESF"];
   return [...refs].sort((a, b) => {

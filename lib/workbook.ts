@@ -8,9 +8,13 @@
  * silence. Un fichier a moitie lu sans que personne ne le sache serait pire
  * qu'un fichier refuse.
  *
+ * Une ligne du classeur = une exigence ou un groupe d'exigences, pour un seul
+ * document de certification. Une exigence qui sert a la fois a la SSA et au
+ * SyDMP occupe donc deux lignes : ce sont deux justifications differentes.
+ *
  * La lecture se fait dans le navigateur : le classeur ne quitte pas le poste.
  */
-import { extractMocIds, dedupeRequirements, extractOccurrencesFromPage } from "./requirements";
+import { extractMocIds, parseRequirementList } from "./requirements";
 import { mergeTemplates, EMPTY_LIBRARY, type BlockTemplate, type TemplateLibrary } from "./templates";
 
 /** Feuille lue par l'application ; le nom fait partie du contrat du modele. */
@@ -18,7 +22,14 @@ export const DATA_SHEET = "Blocs types";
 
 /** Colonnes attendues, reconnues a l'accent et a la casse pres. */
 const COLUMN_ALIASES = {
-  documentType: ["famille de coversheet", "famille", "coversheet", "type de document"],
+  documentType: [
+    "document de certification",
+    "document",
+    "famille de coversheet",
+    "famille",
+    "coversheet",
+    "type de document",
+  ],
   requirements: ["exigences", "exigence", "requirements"],
   moc: ["moyens de conformite", "moyen de conformite", "moc", "means of compliance"],
   text: ["redaction", "texte", "justification"],
@@ -102,7 +113,7 @@ export function parseWorkbookRows(rows: unknown[][]): WorkbookParseResult {
         {
           row: 0,
           message:
-            'En-tetes introuvables. La feuille doit comporter au moins les colonnes "Famille de coversheet" et "Exigences". Repartez du modele telechargeable.',
+            'En-tetes introuvables. La feuille doit comporter au moins les colonnes "Document de certification" et "Exigences". Repartez du modele telechargeable.',
         },
       ],
     };
@@ -132,13 +143,14 @@ export function parseWorkbookRows(rows: unknown[][]): WorkbookParseResult {
     const excelRow = index + 1;
 
     if (!documentType) {
-      issues.push({ row: excelRow, message: "Famille de coversheet absente : ligne ignoree." });
+      issues.push({
+        row: excelRow,
+        message: "Document de certification absent : ligne ignoree.",
+      });
       continue;
     }
 
-    const requirements = dedupeRequirements(
-      extractOccurrencesFromPage(requirementsCell, 1),
-    );
+    const requirements = parseRequirementList(requirementsCell);
     if (!requirements.length) {
       issues.push({
         row: excelRow,
@@ -152,7 +164,7 @@ export function parseWorkbookRows(rows: unknown[][]): WorkbookParseResult {
     if (previous !== undefined) {
       issues.push({
         row: excelRow,
-        message: `Meme famille et memes exigences qu'a la ligne ${previous} : cette ligne remplace la precedente.`,
+        message: `Meme document et memes exigences qu'a la ligne ${previous} : cette ligne remplace la precedente.`,
       });
     }
     seen.set(key, excelRow);
@@ -169,7 +181,7 @@ export function parseWorkbookRows(rows: unknown[][]): WorkbookParseResult {
 
     templates.push({
       documentType,
-      requirementIds: requirements.map((requirement) => requirement.id),
+      requirements,
       text: text || undefined,
       mocIds: mocIds.length ? mocIds : undefined,
       source: source || undefined,

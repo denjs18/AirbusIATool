@@ -21,7 +21,7 @@ const FILE_NAME = "modele-blocs-types.xlsx";
 export const DATA_SHEET = "Blocs types";
 
 const COLUMNS = [
-  { header: "Famille de coversheet", key: "famille", width: 22 },
+  { header: "Document de certification", key: "document", width: 26 },
   { header: "Exigences", key: "exigences", width: 46 },
   { header: "Moyens de conformite", key: "moc", width: 20 },
   { header: "Redaction", key: "redaction", width: 90 },
@@ -34,12 +34,23 @@ const NOTICE = [
   ["A quoi sert ce fichier", ""],
   [
     "",
-    "Il regroupe, pour chaque famille de coversheet, quelles exigences vont ensemble et la redaction qui leur correspond.",
+    "Il regroupe, pour chaque document de certification, quelles exigences vont ensemble et la redaction qui leur correspond.",
   ],
   [
     "",
     "L'application le lit pour restituer la redaction deja ecrite au lieu de vous la faire reecrire a chaque standard.",
   ],
+  ["", ""],
+  ["La regle de la ligne", ""],
+  [
+    "",
+    "Une ligne = une exigence, ou un groupe d'exigences, pour UN SEUL document de certification.",
+  ],
+  [
+    "",
+    "Une exigence utilisee a la fois pour la SSA et pour le SyDMP occupe donc deux lignes distinctes :",
+  ],
+  ["", "les deux documents n'en disent pas la meme chose, ce sont deux justifications differentes."],
   ["", ""],
   ["Ou le ranger", ""],
   [
@@ -55,8 +66,12 @@ const NOTICE = [
   ["", "Une ligne par bloc de justification. Remplissez la feuille \"" + DATA_SHEET + '".'],
   ["", ""],
   [
-    "Famille de coversheet",
-    "La famille du document de certification : SyDMP, SSA, VVS, SyDAS... C'est elle qui regroupe les blocs.",
+    "Document de certification",
+    "Le document que la coversheet accompagne : SyDMP, SSA, VVS, SyDAS... C'est lui qui regroupe les blocs.",
+  ],
+  [
+    "",
+    "L'application affiche cette liste au moment de preparer une coversheet : on choisit le document, puis ses exigences.",
   ],
   [
     "Exigences",
@@ -91,11 +106,12 @@ const NOTICE = [
 /**
  * Exemples fictifs, dans une feuille separee pour ne pas etre pris pour des
  * donnees a conserver. Les deux premieres lignes montrent volontairement la
- * meme exigence traitee seule puis accompagnee.
+ * meme exigence traitee seule puis accompagnee ; la troisieme montre une
+ * exigence reprise par un autre document, sur sa propre ligne.
  */
 const EXAMPLES = [
   {
-    famille: "SYDMP",
+    document: "SYDMP",
     exigences: "CS 25.671(a) ; JAR 25.1301(a)",
     moc: "0",
     redaction: [
@@ -108,7 +124,7 @@ const EXAMPLES = [
     source: "CVS-SYDMP fictive issue 1",
   },
   {
-    famille: "SYDMP",
+    document: "SYDMP",
     exigences: "CS 25.671(a)",
     moc: "0",
     redaction: [
@@ -119,7 +135,19 @@ const EXAMPLES = [
     source: "CVS-SYDMP fictive issue 1",
   },
   {
-    famille: "SSA",
+    // Meme exigence que les deux lignes SYDMP, mais pour un autre document :
+    // c'est bien une ligne a part, avec sa propre redaction.
+    document: "SSA",
+    exigences: "CS 25.671(a)",
+    moc: "3",
+    redaction: [
+      "The enclosed safety assessment demonstrates in §x.x that the failure",
+      "conditions associated with this requirement are adequately classified.",
+    ].join("\n"),
+    source: "CVS-SSA fictive issue 4",
+  },
+  {
+    document: "SSA",
     exigences: "CS 25.671(c)(1) ; CS 25.1309(b)",
     moc: "3",
     redaction: [

@@ -133,9 +133,14 @@ export function renderCoversheetMarkdown(coversheet: Coversheet): string {
     `The enclosed document provides ${TO_BE_COMPLETED} (objet du document joint).`,
     "",
   );
+  // Sans moyen de conformite renseigne, la phrase doit reclamer l'information
+  // plutot que se refermer sur un blanc que la relecture ne verrait pas.
+  const mocPhrase = mocIds.length
+    ? mocIds.map((id) => `Mean of Compliance n°${id}`).join(", ")
+    : TO_BE_COMPLETED;
   lines.push(
-    `This document is used as ${mocIds.map((id) => `Mean of Compliance n°${id}`).join(", ")} ` +
-      "for compliance demonstration with the following certification requirements:",
+    `This document is used as ${mocPhrase} for compliance demonstration with the ` +
+      "following certification requirements:",
     "",
   );
 
@@ -161,6 +166,7 @@ export function renderCoversheetMarkdown(coversheet: Coversheet): string {
   lines.push("---", "");
   lines.push("## Reste a completer", "");
   lines.push("- Objet du document joint.");
+  if (!mocIds.length) lines.push("- Moyens de conformite du document.");
   for (const document of enclosed) {
     if (!document.issue) lines.push(`- Issue du document ${document.ref}.`);
     if (!document.title) lines.push(`- Titre du document ${document.ref}.`);

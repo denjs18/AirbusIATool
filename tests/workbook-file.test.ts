@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import readXlsxFile from "read-excel-file/node";
 import { DATA_SHEET, parseWorkbookRows, readSheets } from "../lib/workbook";
+import { applyTemplates, documentTypesOf, knownRequirementsFor } from "../lib/templates";
 
 const MODEL = "public/modele-blocs-types.xlsx";
 
@@ -46,14 +47,37 @@ describe("feuille d'exemples du classeur", () => {
     expect(library.templates.length).toBeGreaterThanOrEqual(3);
   });
 
+  /**
+   * La regle de la ligne, verifiee sur le modele lui-meme : une exigence
+   * partagee par deux documents de certification occupe deux lignes, avec deux
+   * redactions. Les confondre reviendrait a faire dire a la SSA ce que dit le
+   * SyDMP.
+   */
+  it("traite une exigence partagee par deux documents sur deux lignes distinctes", () => {
+    const partagee = library.templates.filter((template) =>
+      template.requirements.some((requirement) => requirement.id === "CS 25.671(a)"),
+    );
+    const documents = partagee.map((template) => template.documentType);
+    expect(documents).toContain("SYDMP");
+    expect(documents).toContain("SSA");
+
+    const sydmpSeule = partagee.find(
+      (t) => t.documentType === "SYDMP" && t.requirements.length === 1,
+    );
+    const ssaSeule = partagee.find((t) => t.documentType === "SSA");
+    expect(sydmpSeule?.text).toBeDefined();
+    expect(ssaSeule?.text).toBeDefined();
+    expect(sydmpSeule?.text).not.toBe(ssaSeule?.text);
+  });
+
   it("montre la meme exigence traitee seule puis accompagnee", () => {
     const sydmp = library.templates.filter((t) => t.documentType === "SYDMP");
     expect(sydmp).toHaveLength(2);
 
-    const seule = sydmp.find((t) => t.requirementIds.length === 1);
-    const accompagnee = sydmp.find((t) => t.requirementIds.length === 2);
-    expect(seule?.requirementIds).toEqual(["CS 25.671(a)"]);
-    expect(accompagnee?.requirementIds).toContain("CS 25.671(a)");
+    const seule = sydmp.find((t) => t.requirements.length === 1);
+    const accompagnee = sydmp.find((t) => t.requirements.length === 2);
+    expect(seule?.requirements.map((r) => r.id)).toEqual(["CS 25.671(a)"]);
+    expect(accompagnee?.requirements.map((r) => r.id)).toContain("CS 25.671(a)");
     expect(seule?.text).not.toBe(accompagnee?.text);
   });
 
@@ -88,5 +112,59 @@ describe("choix de la feuille", () => {
   it("n'ecarte pas un onglet renomme s'il est le seul exploitable", () => {
     const renomme = [{ sheet: "Ma bibliotheque", data: exampleRows }];
     expect(readSheets(renomme).library.templates.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * Parcours du module 2, sur le classeur reellement genere.
+ *
+ * On part de la liste des documents de certification, on ouvre l'un d'eux, on
+ * coche des exigences, on valide : le texte restitue doit etre celui de la
+ * ligne correspondante, et rien d'autre. C'est tout ce que l'onglet fait, donc
+ * tout ce qu'il y a a verifier.
+ */
+describe("preparation d'une coversheet depuis le classeur", () => {
+  const { library } = parseWorkbookRows(exampleRows);
+
+  it("propose les documents de certification declares", () => {
+    expect(documentTypesOf(library)).toEqual(["SSA", "SYDMP"]);
+  });
+
+  it("n'ouvre que les exigences du document choisi", () => {
+    const sydmp = knownRequirementsFor(library, "SYDMP").map((r) => r.id);
+    const ssa = knownRequirementsFor(library, "SSA").map((r) => r.id);
+    expect(sydmp).toEqual(["CS 25.671(a)", "JAR 25.1301(a)"]);
+    expect(ssa).toContain("CS 25.1309(b)");
+    // Une exigence propre a la SSA ne doit pas apparaitre sous le SyDMP.
+    expect(sydmp).not.toContain("CS 25.1309(b)");
+  });
+
+  it("restitue le texte de la combinaison validee, et un autre quand elle change", () => {
+    const sydmp = knownRequirementsFor(library, "SYDMP");
+    const a = sydmp.find((r) => r.id === "CS 25.671(a)")!;
+    const b = sydmp.find((r) => r.id === "JAR 25.1301(a)")!;
+
+    const ensemble = applyTemplates("SYDMP", [a, b], library).blocks;
+    const seule = applyTemplates("SYDMP", [a], library).blocks;
+
+    expect(ensemble).toHaveLength(1);
+    expect(seule).toHaveLength(1);
+    expect(ensemble[0].justification).not.toBe(seule[0].justification);
+  });
+
+  it("donne au meme choix d'exigence un autre texte sous un autre document", () => {
+    const [a] = knownRequirementsFor(library, "SSA").filter((r) => r.id === "CS 25.671(a)");
+    const sousSsa = applyTemplates("SSA", [a], library).blocks[0].justification;
+    const sousSydmp = applyTemplates("SYDMP", [a], library).blocks[0].justification;
+    expect(sousSsa).toBeDefined();
+    expect(sousSsa).not.toBe(sousSydmp);
+  });
+
+  it("signale une combinaison qu'aucune ligne ne declare, plutot que d'en inventer une", () => {
+    const ssa = knownRequirementsFor(library, "SSA");
+    const isolee = ssa.find((r) => r.id === "CS 25.1309(b)")!;
+    const { blocks, uncovered } = applyTemplates("SSA", [isolee], library);
+    expect(uncovered.map((r) => r.id)).toEqual(["CS 25.1309(b)"]);
+    expect(blocks[0].justification).toBeUndefined();
   });
 });

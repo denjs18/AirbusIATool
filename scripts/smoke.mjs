@@ -3,7 +3,12 @@
  *
  * Complete la suite vitest : celle-ci valide la logique metier, celui-ci valide
  * que la demonstration se deroule reellement (lecture PDF cote client, worker
- * pdf.js servi correctement, enchainement des cinq modules, zero erreur console).
+ * pdf.js servi correctement, enchainement des modules, zero erreur console).
+ *
+ * Le coeur du test est le parcours du module 2 : documents de certification
+ * issus du classeur, exigences du document choisi, validation, restitution du
+ * texte. C'est le seul endroit ou l'on verifie que la selection commande bien
+ * le texte, dans le navigateur et non dans une fonction pure.
  *
  * Prerequis :
  *   npm run build && npx next start -p 3210
@@ -11,40 +16,112 @@
  * Puis :
  *   node scripts/smoke.mjs
  */
+import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
 
 const BASE = "http://localhost:3210";
 const OUT = process.env.SMOKE_OUT ?? "screenshots";
 
-import { mkdirSync } from "node:fs";
 mkdirSync(OUT, { recursive: true });
 
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM_PATH,
-});
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH });
 const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
 
 const errors = [];
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 
+const fail = (message) => {
+  errors.push(`ASSERTION : ${message}`);
+  console.log("ECHEC :", message);
+};
+
 await page.goto(BASE, { waitUntil: "networkidle" });
 
-// --- Module 1 : plan de certification -------------------------------------
+// --- Module 1 : extraction des exigences de l'ACP -------------------------
 await page.getByRole("button", { name: "Charger l'ACP fictif" }).click();
 await page.getByText("Exigences extraites", { exact: false }).waitFor({ timeout: 30000 });
 const reqCount = await page.locator("table tbody tr").count();
-const pages = await page.locator("text=Pages analysees").locator("..").innerText();
-console.log("MODULE 1 : lignes d'exigences =", reqCount, "|", pages.replace(/\n/g, " "));
-await page.screenshot({ path: `${OUT}/01-plan.png`, fullPage: false });
+console.log("MODULE 1 : lignes d'exigences =", reqCount);
+if (reqCount === 0) fail("aucune exigence extraite de l'ACP fictif");
+await page.screenshot({ path: `${OUT}/01-plan.png` });
 
-// --- Module 2 : trames ----------------------------------------------------
-await page.getByRole("button", { name: /2\. Trames de coversheets/ }).click();
-await page.getByText("Trames generees", { exact: false }).waitFor();
-const sheets = await page.locator("ul li button span.font-mono").count();
-const md = await page.locator("pre").innerText();
-console.log("MODULE 2 : trames =", sheets, "| trame contient [A REDIGER] :", md.includes("[A REDIGER]"));
-await page.screenshot({ path: `${OUT}/02-trames.png` });
+// --- Parametres : chargement de la bibliotheque ---------------------------
+await page.getByRole("button", { name: /Parametres/ }).click();
+await page.getByRole("button", { name: "Charger l'exemple fictif" }).click();
+await page.getByText("Blocs types", { exact: false }).first().waitFor();
+await page.waitForTimeout(300);
+const documentsCount = await page
+  .locator("text=Documents de certification")
+  .locator("..")
+  .innerText();
+console.log("PARAMETRES :", documentsCount.replace(/\n/g, " "));
+await page.screenshot({ path: `${OUT}/00-parametres.png` });
+
+// --- Module 2 : preparer une coversheet -----------------------------------
+await page.getByRole("button", { name: /2\. Preparer une coversheet/ }).click();
+await page.getByText("1. Document de certification", { exact: false }).waitFor();
+
+// Les documents proposes viennent du classeur, pas de l'ACP.
+const carte = (titre) =>
+  page.locator("section").filter({ has: page.getByRole("heading", { name: titre }) });
+
+const documents = await carte("1. Document de certification")
+  .locator("button span.font-mono")
+  .allInnerTexts();
+console.log("MODULE 2 : documents proposes =", documents.join(", "));
+if (!documents.includes("SYDMP")) fail("SYDMP absent des documents proposes");
+
+await page.getByRole("button", { name: /^SYDMP/ }).click();
+await page.getByText("2. Exigences de SYDMP", { exact: false }).waitFor();
+
+const exigences = await carte(/^2\. Exigences/).locator("label span.font-mono").allInnerTexts();
+console.log("MODULE 2 : exigences de SYDMP =", exigences.join(" | "));
+// Le qualifieur saisi dans le classeur doit survivre jusqu'a l'ecran.
+if (!exigences.some((e) => e.includes("Amdt 23"))) {
+  fail("le qualifieur du classeur ne remonte pas dans la liste des exigences");
+}
+
+/** Coche les exigences citees, valide, et rend la coversheet produite. */
+async function valider(citations) {
+  await page.getByRole("button", { name: "Vider" }).click();
+  for (const citation of citations) {
+    await page.locator("label").filter({ hasText: citation }).getByRole("checkbox").check();
+  }
+  await page.getByRole("button", { name: "Valider" }).click();
+  await page.getByText("5. Coversheet", { exact: false }).waitFor();
+  return page.locator("pre").last().innerText();
+}
+
+// Avant validation, rien n'est produit : la trame ne doit pas exister.
+if (await page.getByText("5. Coversheet", { exact: false }).count()) {
+  fail("la coversheet apparait avant toute validation");
+}
+
+const ensemble = await valider(["CS 25.671(a) Amdt 23", "JAR 25.1301(a) ch. 11"]);
+console.log("MODULE 2 : trame {A,B} =", ensemble.split("\n").length, "lignes");
+await page.screenshot({ path: `${OUT}/02-coversheet.png`, fullPage: true });
+
+const seule = await valider(["CS 25.671(a) Amdt 23"]);
+console.log("MODULE 2 : trame {A} =", seule.split("\n").length, "lignes");
+
+if (ensemble === seule) fail("la selection ne change pas le texte restitue");
+if (!ensemble.includes("§x.x")) fail("les reperes de paragraphe ne sont pas restitues");
+if (!ensemble.includes("Amdt 23")) fail("la citation produite a perdu son qualifieur");
+console.log(
+  "MODULE 2 : textes distincts =",
+  ensemble !== seule,
+  "| qualifieur cite =",
+  ensemble.includes("Amdt 23"),
+);
+
+// La meme exigence, sous un autre document de certification, doit donner un
+// autre texte : c'est la regle de la ligne, verifiee de bout en bout.
+await page.getByRole("button", { name: /^SSA/ }).click();
+await page.getByText("2. Exigences de SSA", { exact: false }).waitFor();
+const sousSsa = await valider(["CS 25.671(a) Amdt 23"]);
+if (sousSsa === seule) fail("la meme exigence donne le meme texte sous SSA et sous SYDMP");
+console.log("MODULE 2 : CS 25.671(a) donne un texte propre a la SSA =", sousSsa !== seule);
 
 // --- Module 3 : coherence des renvois -------------------------------------
 await page.getByRole("button", { name: /3\. Coherence des renvois/ }).click();
@@ -54,36 +131,17 @@ await page.getByRole("button", { name: "Charger le dossier de securite fictif" }
 await page.getByText("chapitres detectes", { exact: false }).waitFor({ timeout: 30000 });
 await page.getByRole("button", { name: "Verifier les renvois" }).click();
 await page.getByText("Resultats du controle", { exact: false }).waitFor();
-const badges = await page.locator("section >> text=Resultats du controle").locator("..").innerText();
-console.log("MODULE 3 :", badges.split("\n").slice(0, 12).join(" | "));
-const results3 = await page.locator("ul li").filter({ hasText: "Chapitre" }).allInnerTexts();
-console.log("MODULE 3 detail :", results3.map((r) => r.split("\n").slice(0, 2).join(" ")).join(" // "));
+console.log("MODULE 3 : controle execute");
 await page.screenshot({ path: `${OUT}/03-coherence.png` });
 
-// --- Module 4 : en-tetes --------------------------------------------------
-await page.getByRole("button", { name: /4\. Controle des en-tetes/ }).click();
-await page.getByRole("button", { name: "Coversheet fictive (defauts)" }).click();
-await page.getByText("Champs lus dans l'en-tete", { exact: false }).waitFor({ timeout: 30000 });
-const checks4 = await page.locator("ul li").allInnerTexts();
-console.log("MODULE 4 :", checks4.map((c) => c.split("\n").slice(0, 2).join(" ")).join(" // "));
-await page.screenshot({ path: `${OUT}/04-entetes.png` });
-
-// --- Module 5 : recoupement ----------------------------------------------
-await page.getByRole("button", { name: /5\. Recoupement/ }).click();
+// --- Module 4 : recoupement ----------------------------------------------
+await page.getByRole("button", { name: /4\. Recoupement/ }).click();
 await page.getByRole("button", { name: "Charger le registre fictif" }).click();
 await page.getByText("Resultat du recoupement", { exact: false }).waitFor({ timeout: 30000 });
-const metrics5 = await page.locator("text=Couverture du plan").locator("../..").innerText();
-console.log("MODULE 5 :", metrics5.replace(/\n/g, " | "));
-await page.screenshot({ path: `${OUT}/05-recoupement.png` });
+const metrics = await page.locator("text=Couverture du plan").locator("../..").innerText();
+console.log("MODULE 4 :", metrics.replace(/\n/g, " | "));
+await page.screenshot({ path: `${OUT}/04-recoupement.png` });
 
-
-// Option de couverture au niveau du paragraphe
-await page.getByRole("checkbox").check();
-await page.waitForTimeout(400);
-const metrics5b = await page.locator("text=Couverture du plan").locator("../..").innerText();
-console.log("MODULE 5 (option paragraphe) :", metrics5b.replace(/\n/g, " | "));
-await page.screenshot({ path: `${OUT}/05b-recoupement-option.png` });
-
-console.log("ERREURS CONSOLE :", errors.length ? errors : "aucune");
+console.log("ERREURS :", errors.length ? errors : "aucune");
 if (errors.length) process.exitCode = 1;
 await browser.close();

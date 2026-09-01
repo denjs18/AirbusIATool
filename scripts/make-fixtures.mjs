@@ -356,7 +356,11 @@ const registry = {
  * sans en reprendre le contenu. Les identifiants d'exigences correspondent a
  * ceux que produit l'ACP fictif ci-dessus : sans cela, rien ne serait restitue.
  *
- * La famille SYDMP porte volontairement deux blocs qui se recoupent, pour
+ * Les exigences sont citees en clair, comme elles le seraient dans le classeur :
+ * l'application les relit avec le meme analyseur que les documents, donc le
+ * qualifieur ("amdt. 23", "ch. 11") voyage jusqu'a la coversheet produite.
+ *
+ * Le document SYDMP porte volontairement deux blocs qui se recoupent, pour
  * montrer qu'une meme exigence appelle une redaction differente selon qu'elle
  * est traitee seule ou avec une autre.
  */
@@ -366,7 +370,7 @@ const blockTemplates = {
   templates: [
     {
       documentType: "SYDMP",
-      requirementIds: ["CS 25.671(a)", "JAR 25.1301(a)"],
+      requirements: ["CS 25.0671(a) amdt. 23", "JAR 25.1301(a) ch. 11"],
       text: [
         "The enclosed SyDMP is the master plan describing the development assurance",
         "activities to be performed for the change requests listed in \u00a7x.x, which are",
@@ -380,7 +384,7 @@ const blockTemplates = {
     },
     {
       documentType: "SYDMP",
-      requirementIds: ["CS 25.671(a)"],
+      requirements: ["CS 25.0671(a) amdt. 23"],
       text: [
         "The enclosed SyDMP describes in \u00a7x.x the development assurance activities",
         "applicable to this requirement, and justifies in \u00a7x.x the deviations to the",
@@ -389,8 +393,22 @@ const blockTemplates = {
       source: "CVS-SYDMP fictive issue 1",
     },
     {
+      // Meme exigence que les deux blocs SYDMP ci-dessus, mais pour un autre
+      // document de certification : c'est une ligne a part, avec sa propre
+      // redaction. C'est le cas d'une exigence servie a la fois par la SSA et
+      // par le SyDMP.
       documentType: "SSA",
-      requirementIds: ["CS 25.671(c)(1)", "CS 25.1309(b)"],
+      requirements: ["CS 25.0671(a) amdt. 23"],
+      text: [
+        "The enclosed safety assessment demonstrates in \u00a7x.x that the failure",
+        "conditions associated with this requirement are classified consistently with",
+        "the severity definitions recalled in \u00a7x.x.",
+      ].join("\n"),
+      source: "CVS-SSA fictive issue 4",
+    },
+    {
+      documentType: "SSA",
+      requirements: ["CS 25.671(c)(1)", "CS 25.1309(b)"],
       text: [
         "Combinations of failures have been classified in \u00a7x.x, and adequate failure",
         "probabilities are demonstrated in \u00a7x.x.",
@@ -403,7 +421,7 @@ const blockTemplates = {
     },
     {
       documentType: "SSA",
-      requirementIds: ["CS 25.672"],
+      requirements: ["CS 25.672"],
       text: [
         "Chapter \u00a7x.x of the safety assessment provides the list of alerting and",
         "demonstrates the adequate level of probability.",
@@ -412,7 +430,7 @@ const blockTemplates = {
     },
     {
       documentType: "VVS",
-      requirementIds: ["CS 25.143", "CS 25.671"],
+      requirements: ["CS 25.143", "CS 25.671 amdt 27"],
       text: [
         "The enclosed verification summary shows compliance to the requirements quoted",
         "above by stating the correctness of the laboratory tests (\u00a7x.x) and the good",
