@@ -142,6 +142,63 @@ const metrics = await page.locator("text=Couverture du plan").locator("../..").i
 console.log("MODULE 4 :", metrics.replace(/\n/g, " | "));
 await page.screenshot({ path: `${OUT}/04-recoupement.png` });
 
+// --- Pointage des chapitres ----------------------------------------------
+//
+// Le coeur de la saisie : chaque §x.x devient un champ dans la phrase, guide
+// par l'indication de l'edition precedente. Ce qui est verifie ici, c'est que
+// l'indication guide sans jamais sortir dans le document produit.
+await page.getByRole("button", { name: /2\. Preparer une coversheet/ }).click();
+await page.getByRole("button", { name: /^SYDMP/ }).click();
+await valider(["CS 25.671(a) Amdt 23", "JAR 25.1301(a) ch. 11"]);
+
+const champs = carte(/^4\. Pointer les chapitres/).locator("input[data-repere]");
+const nb = await champs.count();
+const indications = await champs.evaluateAll((els) =>
+  els.map((el) => el.getAttribute("placeholder")),
+);
+console.log("SAISIE : champs =", nb, "| indications =", indications.join(", "));
+if (nb === 0) fail("aucun champ de saisie a la place des reperes");
+if (!indications.includes("5.4")) fail("l'indication de l'edition precedente n'est pas proposee");
+
+/**
+ * Fuite d'indication : un crochet contenant un numero de chapitre. Distinct des
+ * "[A COMPLETER]" que la trame porte legitimement.
+ */
+const fuiteIndication = (texte) => /\[\s*(?:ch\.?\s*)?\d[^\]]*\]/.test(texte);
+
+// Une indication est proposee, pas affirmee : tant que rien n'est saisi, elle
+// ne doit pas se retrouver dans la trame.
+let trame = await page.locator("pre").last().innerText();
+if (fuiteIndication(trame)) fail("une indication non verifiee est sortie dans la coversheet");
+if (/§\s*5\.4/.test(trame)) fail("l'indication a ete prise pour un chapitre cite");
+
+await champs.nth(0).fill("6.1");
+await page.waitForTimeout(400);
+trame = await page.locator("pre").last().innerText();
+if (!trame.includes("§6.1")) fail("le chapitre saisi n'apparait pas dans la trame");
+if (fuiteIndication(trame)) fail("une indication est restee dans la trame");
+
+const restants = await carte(/^4\. Pointer les chapitres/)
+  .locator("text=Reperes restants")
+  .locator("..")
+  .innerText();
+console.log("SAISIE :", restants.replace(/\n/g, " "), "| §6.1 dans la trame :", trame.includes("§6.1"));
+await page.screenshot({ path: `${OUT}/02b-pointage.png`, fullPage: true });
+
+// Le brouillon doit survivre a un aller-retour vers un autre onglet : pointer
+// un chapitre demande de lire le document joint, donc de quitter l'ecran.
+await page.getByRole("button", { name: /Parametres/ }).click();
+await page.waitForTimeout(300);
+await page.getByRole("button", { name: /2\. Preparer une coversheet/ }).click();
+await page.waitForTimeout(500);
+const repris = await carte(/^4\. Pointer les chapitres/)
+  .locator("input[data-repere]")
+  .nth(0)
+  .inputValue()
+  .catch(() => "");
+console.log("BROUILLON : chapitre repris apres changement d'onglet =", repris || "(perdu)");
+if (repris !== "6.1") fail("la saisie est perdue au changement d'onglet");
+
 // --- Bibliotheque laissee par une version anterieure -----------------------
 //
 // Le poste d'un utilisateur garde la bibliotheque du jour ou il a ouvert

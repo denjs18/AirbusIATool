@@ -94,6 +94,25 @@ const NOTICE = [
     "",
     "L'application compte ces reperes et vous rappelle combien il en reste ; elle ne cherche jamais a les deviner.",
   ],
+  ["", ""],
+  [
+    "",
+    "Indication de recherche : ajoutez entre crochets, colle au repere, l'endroit ou l'information se",
+  ],
+  ["", "trouvait a l'edition precedente du document. Exemple : \u00a7x.x[5.4] ou \u00a7x.x[ch. 9]."],
+  [
+    "",
+    "L'application l'affiche en grise dans le champ de saisie : elle guide la recherche, elle ne la remplace pas.",
+  ],
+  [
+    "",
+    "Elle ne sort JAMAIS dans la coversheet produite : elle vient d'une edition anterieure et n'a pas ete verifiee.",
+  ],
+  [
+    "",
+    "Collez-la au repere plutot que dans une colonne a part : une liste en face du texte se decale",
+  ],
+  ["", "des qu'un repere est insere au milieu, et designe alors le mauvais paragraphe."],
   ["Coversheet source", "Facultatif. D'ou vient cette redaction, pour pouvoir y revenir."],
   ["", ""],
   ["Ce que l'application ne fait pas", ""],
@@ -116,10 +135,10 @@ const EXAMPLES = [
     moc: "0",
     redaction: [
       "The enclosed SyDMP is the master plan describing the development assurance",
-      "activities to be performed for the change requests listed in §x.x.",
+      "activities to be performed for the change requests listed in §x.x[2.1].",
       "",
-      "The SyDMP references in §x.x the other plans describing the activities to be",
-      "performed, and provides in §x.x the list of applicable rules.",
+      "The SyDMP references in §x.x[5.4] the other plans describing the activities to be",
+      "performed, and provides in §x.x[9] the list of applicable rules.",
     ].join("\n"),
     source: "CVS-SYDMP fictive issue 1",
   },
@@ -128,7 +147,7 @@ const EXAMPLES = [
     exigences: "CS 25.671(a)",
     moc: "0",
     redaction: [
-      "The enclosed SyDMP describes in §x.x the development assurance activities",
+      "The enclosed SyDMP describes in §x.x[5.4] the development assurance activities",
       "applicable to this requirement, and justifies in §x.x the deviations to the",
       "applicable processes.",
     ].join("\n"),
@@ -141,7 +160,7 @@ const EXAMPLES = [
     exigences: "CS 25.671(a)",
     moc: "3",
     redaction: [
-      "The enclosed safety assessment demonstrates in §x.x that the failure",
+      "The enclosed safety assessment demonstrates in §x.x[4.2] that the failure",
       "conditions associated with this requirement are adequately classified.",
     ].join("\n"),
     source: "CVS-SSA fictive issue 4",

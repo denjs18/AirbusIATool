@@ -9,13 +9,13 @@
  *
  * Le parcours suit celui du redacteur : on designe le document dont on prepare
  * la coversheet, on coche les exigences qu'il traite pour ce standard, on
- * valide, et l'outil restitue le document final. Il ne reste qu'a pointer les
- * paragraphes du document joint.
+ * valide, puis on pointe les chapitres du document joint dans le texte
+ * restitue.
  *
  * Le texte n'est jamais invente. Tout ce qui sort d'ici a d'abord ete ecrit
- * dans le classeur.
+ * dans le classeur, ou saisi a l'ecran par le redacteur.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Empty, Metric } from "../ui";
 import {
   buildCoversheet,
@@ -25,32 +25,52 @@ import {
   TO_BE_COMPLETED,
 } from "@/lib/coversheet";
 import { downloadText, safeFileName } from "@/lib/download";
+import { EMPTY_DRAFT, loadDraft, saveDraft } from "@/lib/draft-storage";
 import { loadLibrary } from "@/lib/library-storage";
 import {
-  applyTemplates,
   countPlaceholders,
+  fillPlaceholders,
+  splitPlaceholders,
+  type PlaceholderSlot,
+} from "@/lib/placeholders";
+import {
+  applyTemplates,
   documentTypesOf,
   EMPTY_LIBRARY,
   knownRequirementsFor,
   requirementIdsOf,
   templatesFor,
+  type AppliedBlock,
   type TemplateLibrary,
 } from "@/lib/templates";
 import type { ParsedPlan } from "@/lib/types";
 
+/** Identifie un bloc de facon stable, pour rattacher les chapitres saisis. */
+function blockKey(block: AppliedBlock): string {
+  return block.requirements.map((requirement) => requirement.id).join("|");
+}
+
 export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
   const [library, setLibrary] = useState<TemplateLibrary>(EMPTY_LIBRARY);
-  const [documentType, setDocumentType] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
-  /** La trame n'apparait qu'apres validation explicite de la selection. */
-  const [validated, setValidated] = useState(false);
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
+  /** Le brouillon est relu avant d'etre reenregistre, sinon on l'ecraserait vide. */
+  const [restored, setRestored] = useState(false);
+  const blocksRef = useRef<HTMLUListElement>(null);
 
-  const [documentRef, setDocumentRef] = useState("");
-  const [documentIssue, setDocumentIssue] = useState("");
-  const [documentTitle, setDocumentTitle] = useState("");
-  const [moc, setMoc] = useState("");
+  const { documentType, selected, validated, fills } = draft;
 
-  useEffect(() => setLibrary(loadLibrary()), []);
+  useEffect(() => {
+    setLibrary(loadLibrary());
+    setDraft(loadDraft());
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (restored) saveDraft(draft);
+  }, [draft, restored]);
+
+  const patch = (change: Partial<typeof draft>) =>
+    setDraft((current) => ({ ...current, ...change }));
 
   const documents = useMemo(() => documentTypesOf(library), [library]);
 
@@ -73,53 +93,93 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
 
   const mocIds = useMemo(
     () =>
-      moc
+      draft.moc
         .split(/[,;/\s]+/)
         .map((value) => value.trim().toUpperCase())
         .filter(Boolean),
-    [moc],
+    [draft.moc],
   );
 
-  const match = useMemo(
-    () => applyTemplates(documentType, chosen, library),
+  const blocks = useMemo(
+    () => applyTemplates(documentType, chosen, library).blocks,
     [documentType, chosen, library],
+  );
+
+  /** Chapitres saisis pour un bloc, ranges par rang de repere. */
+  const valuesOf = (block: AppliedBlock): Record<number, string> => {
+    const key = blockKey(block);
+    const values: Record<number, string> = {};
+    for (const [field, value] of Object.entries(fills)) {
+      const [owner, rank] = field.split("#");
+      if (owner === key) values[Number(rank)] = value;
+    }
+    return values;
+  };
+
+  /**
+   * Blocs tels qu'ils partiront dans la coversheet : reperes remplaces par les
+   * chapitres saisis, indications retirees. Une indication vient d'une edition
+   * anterieure et n'a pas ete verifiee : elle ne doit pas ressortir comme un
+   * chapitre cite.
+   */
+  const written = useMemo(
+    () =>
+      blocks.map((block) => ({
+        ...block,
+        justification: block.justification
+          ? fillPlaceholders(block.justification, valuesOf(block))
+          : undefined,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [blocks, fills],
   );
 
   const coversheet = useMemo(
     () =>
-      buildCoversheet(match.blocks, {
+      buildCoversheet(written, {
         documentType: documentType || TO_BE_COMPLETED,
         enclosed: [
           {
-            ref: documentRef.trim() || TO_BE_COMPLETED,
-            issue: documentIssue.trim() || undefined,
-            title: documentTitle.trim() || undefined,
+            ref: draft.documentRef.trim() || TO_BE_COMPLETED,
+            issue: draft.documentIssue.trim() || undefined,
+            title: draft.documentTitle.trim() || undefined,
           },
         ],
         mocIds,
         programme: plan?.header.programme,
         ataChapter: plan?.header.ataChapter,
       }),
-    [match.blocks, documentType, documentRef, documentIssue, documentTitle, mocIds, plan],
+    [
+      written,
+      documentType,
+      draft.documentRef,
+      draft.documentIssue,
+      draft.documentTitle,
+      mocIds,
+      plan,
+    ],
   );
 
   /** Toute modification de la selection invalide la trame deja produite. */
-  function pick(documentTypeName: string) {
-    setDocumentType(documentTypeName);
-    setSelected([]);
-    setValidated(false);
-  }
+  const pick = (name: string) =>
+    patch({ documentType: name, selected: [], validated: false });
 
-  function toggle(id: string) {
-    setValidated(false);
-    setSelected((current) =>
-      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
-    );
-  }
+  const toggle = (id: string) =>
+    patch({
+      validated: false,
+      selected: selected.includes(id)
+        ? selected.filter((value) => value !== id)
+        : [...selected, id],
+    });
 
-  function selectExactly(ids: string[]) {
-    setValidated(false);
-    setSelected(ids);
+  const selectExactly = (ids: string[]) => patch({ validated: false, selected: ids });
+
+  /** Amene au premier repere encore vide, pour n'en oublier aucun. */
+  function goToNextGap() {
+    const inputs = blocksRef.current?.querySelectorAll<HTMLInputElement>("input[data-repere]");
+    const next = [...(inputs ?? [])].find((input) => !input.value.trim());
+    next?.focus();
+    next?.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   if (documents.length === 0) {
@@ -138,9 +198,9 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
   }
 
   const markdown = renderCoversheetMarkdown(coversheet);
-  const blocks = match.blocks;
   const withText = blocks.filter((block) => block.justification).length;
-  const placeholders = remainingPlaceholders(coversheet);
+  const total = blocks.reduce((sum, block) => sum + countPlaceholders(block.justification), 0);
+  const remaining = remainingPlaceholders(coversheet);
 
   return (
     <div className="flex flex-col gap-5">
@@ -193,7 +253,7 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
               <Button variant="secondary" onClick={() => selectExactly([])}>
                 Vider
               </Button>
-              <Button disabled={selected.length === 0} onClick={() => setValidated(true)}>
+              <Button disabled={selected.length === 0} onClick={() => patch({ validated: true })}>
                 Valider
               </Button>
             </>
@@ -262,31 +322,44 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
             subtitle="Ce que l'outil ne peut pas savoir : la reference exacte de l'edition couverte."
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="Reference" value={documentRef} onChange={setDocumentRef} mono
-                     placeholder={TO_BE_COMPLETED} />
-              <Field label="Issue" value={documentIssue} onChange={setDocumentIssue} mono />
-              <Field label="Titre" value={documentTitle} onChange={setDocumentTitle} />
-              <Field label="Moyens de conformite" value={moc} onChange={setMoc} mono
-                     hint="ex. 3, ou 4 6, ou S" />
+              <Field label="Reference" mono placeholder={TO_BE_COMPLETED}
+                     value={draft.documentRef}
+                     onChange={(documentRef) => patch({ documentRef })} />
+              <Field label="Issue" mono value={draft.documentIssue}
+                     onChange={(documentIssue) => patch({ documentIssue })} />
+              <Field label="Titre" value={draft.documentTitle}
+                     onChange={(documentTitle) => patch({ documentTitle })} />
+              <Field label="Moyens de conformite" mono hint="ex. 3, ou 4 6, ou S"
+                     value={draft.moc} onChange={(moc) => patch({ moc })} />
             </div>
           </Card>
 
           <Card
-            title={`4. Blocs restitues (${blocks.length})`}
-            subtitle="La redaction memorisee revient telle quelle ; il reste a pointer les paragraphes."
+            title={`4. Pointer les chapitres (${total - remaining}/${total})`}
+            subtitle="Chaque §x.x est un chapitre du document joint a designer. L'indication grisee rappelle ou il se trouvait a l'edition precedente : elle est a verifier, pas a recopier."
+            actions={
+              remaining > 0 && (
+                <Button variant="secondary" onClick={goToNextGap}>
+                  Aller au repere suivant
+                </Button>
+              )
+            }
           >
-            <ul className="flex flex-col gap-2">
+            <ul ref={blocksRef} className="flex flex-col gap-2">
               {blocks.map((block, index) => {
-                const justification = block.justification;
+                const values = valuesOf(block);
+                const key = blockKey(block);
+                const count = countPlaceholders(block.justification);
+                const done = Object.entries(values).filter(([, v]) => v.trim()).length;
                 return (
                   <li
-                    key={block.requirements.map((r) => r.id).join("|")}
+                    key={key}
                     className="rounded-md border p-3"
                     style={{ borderColor: "var(--border)" }}
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium">Bloc {index + 1}</span>
-                      {justification ? (
+                      {block.justification ? (
                         <span className="rounded bg-ok-100 px-1.5 py-0.5 text-[10px] font-semibold text-ok-500 uppercase">
                           redaction restituee
                         </span>
@@ -300,17 +373,29 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
                       </span>
                     </div>
 
-                    {justification ? (
+                    {block.justification ? (
                       <>
-                        <pre
-                          className="mt-2 max-h-48 overflow-y-auto rounded border p-2 text-[11px] leading-relaxed whitespace-pre-wrap"
+                        <div
+                          className="mt-2 rounded border p-2 font-mono text-[11px] leading-loose whitespace-pre-wrap"
                           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
                         >
-                          {justification}
-                        </pre>
+                          {splitPlaceholders(block.justification).map((part, position) =>
+                            part.kind === "text" ? (
+                              <span key={position}>{part.text}</span>
+                            ) : (
+                              <ChapterInput
+                                key={position}
+                                slot={part}
+                                value={values[part.index] ?? ""}
+                                onChange={(value) =>
+                                  patch({ fills: { ...fills, [`${key}#${part.index}`]: value } })
+                                }
+                              />
+                            ),
+                          )}
+                        </div>
                         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                          {countPlaceholders(justification)} repere
-                          {countPlaceholders(justification) > 1 ? "s" : ""} de paragraphe a pointer
+                          {done}/{count} repere{count > 1 ? "s" : ""} pointe{done > 1 ? "s" : ""}
                           {block.template?.source ? ` · source : ${block.template.source}` : ""}
                         </p>
                       </>
@@ -335,20 +420,25 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
                 tone={blocks.length - withText ? "warning" : "ok"}
               />
               <Metric
-                label="Reperes a pointer"
-                value={placeholders}
-                tone={placeholders ? "warning" : "ok"}
+                label="Reperes restants"
+                value={remaining}
+                tone={remaining ? "warning" : "ok"}
               />
             </div>
           </Card>
 
           <Card
             title="5. Coversheet"
+            subtitle={
+              remaining
+                ? `${remaining} repere${remaining > 1 ? "s" : ""} encore a pointer : la trame sortira avec ses trous.`
+                : "Tous les reperes sont pointes."
+            }
             actions={
               <Button
                 onClick={() =>
                   downloadText(
-                    safeFileName(`coversheet-${documentRef || documentType}`, "md"),
+                    safeFileName(`coversheet-${draft.documentRef || documentType}`, "md"),
                     markdown,
                     "text/markdown",
                   )
@@ -368,6 +458,47 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Champ de saisie d'un chapitre, a la place du repere, dans la phrase.
+ *
+ * On lit le trou dans son contexte plutot que dans une liste detachee du texte,
+ * et l'indication de l'edition precedente s'affiche en grise tant que rien
+ * n'est saisi : elle guide la recherche sans jamais se substituer a elle.
+ */
+function ChapterInput({
+  slot,
+  value,
+  onChange,
+}: {
+  slot: PlaceholderSlot;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const width = Math.max(4, (value || slot.hint || "x.x").length + 2);
+  const filled = value.trim().length > 0;
+  return (
+    <span className="inline-flex items-baseline">
+      <span>§</span>
+      <input
+        data-repere
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={slot.hint ?? "x.x"}
+        title={
+          slot.hint
+            ? `Edition precedente : ${slot.hint} — a verifier dans le document joint`
+            : "Aucune indication : chapitre a rechercher dans le document joint"
+        }
+        style={{
+          width: `${width}ch`,
+          borderColor: filled ? "var(--border)" : "var(--warn-500, #b45309)",
+        }}
+        className="mx-0.5 rounded border px-1 py-0 text-center font-mono text-[11px]"
+      />
+    </span>
   );
 }
 

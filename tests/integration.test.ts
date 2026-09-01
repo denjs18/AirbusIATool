@@ -12,11 +12,11 @@ import { checkCitations, extractChapters, extractCitations } from "../lib/cohere
 import { crossCheck } from "../lib/crosscheck";
 import { parseHeader } from "../lib/headers";
 import { parsePlan, planStats } from "../lib/parse-acp";
+import { countPlaceholders, placeholderHints } from "../lib/placeholders";
 import { isRegistryFile, registryToCoverage } from "../lib/registry";
 import {
   applyTemplates,
   coerceLibrary,
-  countPlaceholders,
   knownRequirementsFor,
 } from "../lib/templates";
 import { extractPdfTextNode } from "./pdf-node";
@@ -203,6 +203,20 @@ describe("blocs types fictifs et ACP fictif", () => {
     expect(ensemble[0].justification).toBeDefined();
     expect(seule[0].justification).toBeDefined();
     expect(ensemble[0].justification).not.toBe(seule[0].justification);
+  });
+
+  /**
+   * Les indications de l'exemple fictif doivent etre lues comme telles, sinon
+   * la demonstration montre "§x.x[5.4]" a l'ecran au lieu d'un champ guide.
+   */
+  it("porte des indications de recherche lisibles", () => {
+    const textes = library!.templates.map((t) => t.text ?? "");
+    const indications = textes.flatMap((texte) => placeholderHints(texte)).filter(Boolean);
+    expect(indications.length).toBeGreaterThan(0);
+    // Aucune indication ne doit rester visible dans le texte une fois decoupe.
+    for (const texte of textes) {
+      expect(texte.includes("[") ? placeholderHints(texte).some(Boolean) : true).toBe(true);
+    }
   });
 
   it("laisse des reperes de paragraphe a pointer dans chaque redaction", () => {

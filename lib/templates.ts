@@ -67,20 +67,6 @@ function templateKey(template: BlockTemplate): string {
   return `${normalizeDocumentType(template.documentType)}::${ids}`;
 }
 
-/**
- * Repere de paragraphe a completer.
- *
- * Le redacteur ecrit "§x.x" la ou il devra pointer un chapitre du document
- * joint. On les compte pour pouvoir dire combien il en reste, sans jamais
- * chercher a les deviner : ils dependent du contenu du document.
- */
-export const PLACEHOLDER_PATTERN = /§\s*[\dxX]*[xX][\dxX.]*/g;
-
-export function countPlaceholders(text: string | undefined): number {
-  if (!text) return 0;
-  return text.match(PLACEHOLDER_PATTERN)?.length ?? 0;
-}
-
 /** Documents de certification presents dans la bibliotheque, tries. */
 export function documentTypesOf(library: TemplateLibrary): string[] {
   return [...new Set(library.templates.map((t) => normalizeDocumentType(t.documentType)))].sort();

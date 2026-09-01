@@ -14,7 +14,7 @@
  * l'ingenieur, et restent donc a completer.
  */
 import { describeMoc } from "./moc";
-import { countPlaceholders } from "./templates";
+import { countPlaceholders } from "./placeholders";
 import type {
   Coversheet,
   DocumentHeader,

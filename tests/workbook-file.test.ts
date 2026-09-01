@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import readXlsxFile from "read-excel-file/node";
 import { DATA_SHEET, parseWorkbookRows, readSheets } from "../lib/workbook";
 import { applyTemplates, documentTypesOf, knownRequirementsFor } from "../lib/templates";
+import { countPlaceholders, fillPlaceholders, placeholderHints } from "../lib/placeholders";
 
 const MODEL = "public/modele-blocs-types.xlsx";
 
@@ -158,6 +159,26 @@ describe("preparation d'une coversheet depuis le classeur", () => {
     const sousSydmp = applyTemplates("SYDMP", [a], library).blocks[0].justification;
     expect(sousSsa).toBeDefined();
     expect(sousSsa).not.toBe(sousSydmp);
+  });
+
+  /**
+   * Le classeur modele documente la syntaxe des indications : si le lecteur
+   * cessait de les comprendre, l'exemple fourni afficherait "§x.x[5.4]" tel
+   * quel et la notice mentirait.
+   */
+  it("lit les indications de recherche ecrites dans le modele", () => {
+    const sydmp = knownRequirementsFor(library, "SYDMP");
+    const a = sydmp.find((r) => r.id === "CS 25.671(a)")!;
+    const b = sydmp.find((r) => r.id === "JAR 25.1301(a)")!;
+    const texte = applyTemplates("SYDMP", [a, b], library).blocks[0].justification!;
+
+    expect(placeholderHints(texte)).toEqual(["2.1", "5.4", "9"]);
+
+    // Une indication ne sort pas dans le document : elle guide, elle n'affirme rien.
+    const rendu = fillPlaceholders(texte, { 0: "3.1" });
+    expect(rendu).toContain("§3.1");
+    expect(rendu).not.toContain("[");
+    expect(countPlaceholders(rendu)).toBe(2);
   });
 
   it("signale une combinaison qu'aucune ligne ne declare, plutot que d'en inventer une", () => {

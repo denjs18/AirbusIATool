@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   applyTemplates,
-  countPlaceholders,
   documentTypesOf,
   EMPTY_LIBRARY,
   forgetTemplate,
@@ -12,6 +11,7 @@ import {
   templatesFor,
   type BlockTemplate,
 } from "../lib/templates";
+import { countPlaceholders } from "../lib/placeholders";
 import { dedupeRequirements, extractOccurrencesFromPage } from "../lib/requirements";
 
 const requirementsOf = (line: string) =>

@@ -7,7 +7,7 @@
         "CS 25.0671(a) amdt. 23",
         "JAR 25.1301(a) ch. 11"
       ],
-      "text": "The enclosed SyDMP is the master plan describing the development assurance\nactivities to be performed for the change requests listed in §x.x, which are\nconsidered in the current certification projects.\n\nThe SyDMP references in §x.x the other plans describing the activities to be\nperformed, and provides in §x.x the list of applicable rules and the\ndevelopment assurance referential.",
+      "text": "The enclosed SyDMP is the master plan describing the development assurance\nactivities to be performed for the change requests listed in §x.x[2.1], which are\nconsidered in the current certification projects.\n\nThe SyDMP references in §x.x[5.4] the other plans describing the activities to be\nperformed, and provides in §x.x[9] the list of applicable rules and the\ndevelopment assurance referential.",
       "source": "CVS-SYDMP fictive issue 1"
     },
     {
@@ -15,7 +15,7 @@
       "requirements": [
         "CS 25.0671(a) amdt. 23"
       ],
-      "text": "The enclosed SyDMP describes in §x.x the development assurance activities\napplicable to this requirement, and justifies in §x.x the deviations to the\napplicable processes.",
+      "text": "The enclosed SyDMP describes in §x.x[5.4] the development assurance activities\napplicable to this requirement, and justifies in §x.x the deviations to the\napplicable processes.",
       "source": "CVS-SYDMP fictive issue 1"
     },
     {
@@ -23,7 +23,7 @@
       "requirements": [
         "CS 25.0671(a) amdt. 23"
       ],
-      "text": "The enclosed safety assessment demonstrates in §x.x that the failure\nconditions associated with this requirement are classified consistently with\nthe severity definitions recalled in §x.x.",
+      "text": "The enclosed safety assessment demonstrates in §x.x[4.2] that the failure\nconditions associated with this requirement are classified consistently with\nthe severity definitions recalled in §x.x[3.1].",
       "source": "CVS-SSA fictive issue 4"
     },
     {

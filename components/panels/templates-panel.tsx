@@ -15,11 +15,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Empty, Metric } from "../ui";
 import { downloadText, safeFileName } from "@/lib/download";
 import { loadLibrary, saveLibrary } from "@/lib/library-storage";
+import { countPlaceholders, placeholderHints } from "@/lib/placeholders";
 import { parseRequirementList } from "@/lib/requirements";
 import type { WorkbookIssue } from "@/lib/workbook";
 import {
   coerceLibrary,
-  countPlaceholders,
   documentTypesOf,
   EMPTY_LIBRARY,
   forgetTemplate,
@@ -311,8 +311,22 @@ export default function TemplatesPanel() {
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>
               Ecrivez <span className="font-mono">§x.x</span> partout ou un chapitre devra etre
               pointe : {countPlaceholders(text)} repere{countPlaceholders(text) > 1 ? "s" : ""}{" "}
-              dans ce texte.
+              dans ce texte. Ajoutez entre crochets l&apos;endroit ou l&apos;information se
+              trouvait a l&apos;edition precedente, <span className="font-mono">§x.x[5.4]</span> :
+              elle guidera la recherche sans jamais sortir dans la coversheet.
             </span>
+            {countPlaceholders(text) > 0 && (
+              // Relire les indications telles que l'outil les a comprises : une
+              // faute de crochet passerait sinon inapercue jusqu'a l'usage.
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Indications lues :{" "}
+                <span className="font-mono">
+                  {placeholderHints(text)
+                    .map((hint, index) => `§${index + 1} → ${hint ?? "aucune"}`)
+                    .join(" · ")}
+                </span>
+              </span>
+            )}
           </label>
 
           {error && <p className="text-sm text-err-500">{error}</p>}
@@ -378,6 +392,11 @@ export default function TemplatesPanel() {
                     <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
                       {countPlaceholders(template.text)} repere
                       {countPlaceholders(template.text) > 1 ? "s" : ""} de paragraphe a pointer
+                      {placeholderHints(template.text).some(Boolean)
+                        ? ` · indications : ${placeholderHints(template.text)
+                            .map((hint) => hint ?? "—")
+                            .join(", ")}`
+                        : ""}
                       {template.source ? ` · source : ${template.source}` : ""}
                     </p>
                   </>

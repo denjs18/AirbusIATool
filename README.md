@@ -67,6 +67,33 @@ consommerait A avant que `{A, B}` n'ait sa chance.
 du document joint et relèvent de sa lecture par l'ingénieur. L'outil compte les `§x.x`
 restants et les rappelle, sans jamais chercher à les deviner.
 
+### Pointer les chapitres, guidé par l'édition précédente
+
+D'une issue à l'autre, un chapitre change de numéro mais rarement de place. L'endroit où
+il se trouvait à l'édition précédente est donc la meilleure piste pour le retrouver. Elle
+s'écrit entre crochets, **collée au repère** :
+
+```
+The SyDMP references in §x.x[5.4] the other plans, and provides in §x.x[9] the list of rules.
+```
+
+Collée plutôt que rangée dans une colonne à part, pour une raison précise : une liste
+`5.4 ; 9 ; 2.1` mise en face du texte se décale d'un cran dès qu'un repère est inséré au
+milieu d'une phrase, **sans que rien ne le signale** — et l'indication désigne alors le
+mauvais paragraphe. Attachée au repère, elle ne peut pas se désynchroniser. Aucune colonne
+à ajouter au classeur.
+
+Au moment de préparer la coversheet, chaque `§x.x` devient **un champ de saisie dans la
+phrase** : on lit le trou dans son contexte, l'indication s'affiche en grisé tant que rien
+n'est saisi, un compteur dit combien de repères restent, et un bouton amène au suivant
+pour n'en oublier aucun. La saisie survit à un changement d'onglet (`sessionStorage`) :
+pointer un chapitre demande de lire le document joint, donc de quitter l'écran.
+
+> **Une indication ne sort jamais dans la coversheet produite.** Elle vient d'une édition
+> antérieure, personne ne l'a vérifiée, et rien dans le document ne la distinguerait d'un
+> chapitre réellement cité. Un repère non saisi ressort en `§x.x` — un trou visible en
+> relecture — jamais en `§5.4`.
+
 ### Où vivent les rédactions
 
 Elles ne sont **ni dans le dépôt, ni dans l'application**. Elles vivent dans un classeur
@@ -81,9 +108,9 @@ certification.**
 
 | Document de certification | Exigences | Moyens de conformité | Rédaction | Coversheet source |
 | --- | --- | --- | --- | --- |
-| SYDMP | CS 25.671(a) Amdt 23 ; JAR 25.1301(a) ch. 11 | 0 | The enclosed SyDMP… §x.x… | CVS-SYDMP issue 1 |
-| SYDMP | CS 25.671(a) Amdt 23 | 0 | The enclosed SyDMP describes… §x.x… | CVS-SYDMP issue 1 |
-| SSA | CS 25.671(a) Amdt 23 | 3 | The enclosed safety assessment… §x.x… | CVS-SSA issue 4 |
+| SYDMP | CS 25.671(a) Amdt 23 ; JAR 25.1301(a) ch. 11 | 0 | The enclosed SyDMP… §x.x[2.1]… | CVS-SYDMP issue 1 |
+| SYDMP | CS 25.671(a) Amdt 23 | 0 | The enclosed SyDMP describes… §x.x[5.4]… | CVS-SYDMP issue 1 |
+| SSA | CS 25.671(a) Amdt 23 | 3 | The enclosed safety assessment… §x.x[4.2]… | CVS-SSA issue 4 |
 
 Les deux premières lignes montrent la même exigence traitée seule puis accompagnée ; la
 troisième, la même exigence reprise par un autre document. Trois lignes, trois
@@ -109,7 +136,7 @@ Il se range donc avec elles, dans le référentiel documentaire — pas dans le 
 Trois choix d'architecture, qui répondent aux points de blocage habituels :
 
 **Le moteur est déterministe, pas génératif.** Les contrôles reposent sur de
-l'analyse de texte et des règles explicites, couvertes par 152 tests automatisés. À
+l'analyse de texte et des règles explicites, couvertes par 178 tests automatisés. À
 données identiques, le résultat est identique. L'IA générative n'intervient dans aucune
 vérification ; sa place naturelle est en assistance ponctuelle à la reformulation, en
 périphérie de l'outil et non dans son moteur.
@@ -165,7 +192,7 @@ coversheet (CS 25.703), coversheet hors plan (CS 25.1329), doublon de couverture
 ## Tests
 
 ```bash
-npm test             # 152 tests : logique métier + intégration sur les PDF réels
+npm test             # 178 tests : logique métier + intégration sur les PDF réels
 ```
 
 `tests/integration.test.ts` rejoue la chaîne complète sur les PDF fictifs et vérifie que
