@@ -142,6 +142,40 @@ const metrics = await page.locator("text=Couverture du plan").locator("../..").i
 console.log("MODULE 4 :", metrics.replace(/\n/g, " | "));
 await page.screenshot({ path: `${OUT}/04-recoupement.png` });
 
+// --- Bibliotheque laissee par une version anterieure -----------------------
+//
+// Le poste d'un utilisateur garde la bibliotheque du jour ou il a ouvert
+// l'outil pour la derniere fois. Une mise en ligne qui change la forme de cette
+// donnee doit donc encore savoir la relire : rendue telle quelle, elle a detruit
+// les deux onglets qui la lisent, alors que tout etait vert au build.
+await page.evaluate(
+  (v) => localStorage.setItem("airbus-ia-tool.block-templates", v),
+  JSON.stringify({
+    templates: [
+      { documentType: "SYDMP", requirementIds: ["CS 25.671(a)"], text: "Voir §x.x." },
+    ],
+  }),
+);
+await page.reload({ waitUntil: "networkidle" });
+
+for (const onglet of [/Parametres/, /2\. Preparer une coversheet/]) {
+  try {
+    await page.getByRole("button", { name: onglet }).click({ timeout: 5000 });
+    await page.waitForTimeout(500);
+    const sections = await page.locator("section").count();
+    if (sections === 0) fail(`onglet ${onglet} vide avec une bibliotheque au format anterieur`);
+  } catch {
+    fail(`onglet ${onglet} inaccessible avec une bibliotheque au format anterieur`);
+  }
+}
+// L'exigence historique doit ressortir convertie, pas ignoree.
+await page.getByRole("button", { name: /^SYDMP/ }).click();
+const reprises = await carte(/^2\. Exigences/).locator("label span.font-mono").allInnerTexts();
+console.log("FORMAT ANTERIEUR : exigences relues =", reprises.join(" | ") || "(aucune)");
+if (!reprises.some((e) => e.includes("CS 25.671(a)"))) {
+  fail("une bibliotheque au format anterieur ne rend plus ses exigences");
+}
+
 console.log("ERREURS :", errors.length ? errors : "aucune");
 if (errors.length) process.exitCode = 1;
 await browser.close();

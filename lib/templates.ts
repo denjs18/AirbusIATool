@@ -302,8 +302,3 @@ export function coerceLibrary(value: unknown): TemplateLibrary | undefined {
 
   return { templates };
 }
-
-/** Verifie qu'une valeur inconnue a la forme attendue d'une bibliotheque. */
-export function isTemplateLibrary(value: unknown): value is TemplateLibrary {
-  return coerceLibrary(value) !== undefined;
-}

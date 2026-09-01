@@ -5,7 +5,7 @@ import {
   documentTypesOf,
   EMPTY_LIBRARY,
   forgetTemplate,
-  isTemplateLibrary,
+  coerceLibrary,
   knownRequirementsFor,
   learnFromBlocks,
   mergeTemplates,
@@ -163,8 +163,28 @@ describe("bibliotheque", () => {
   });
 
   it("valide la forme d'une bibliotheque", () => {
-    expect(isTemplateLibrary({ templates: [TPL_AB] })).toBe(true);
-    expect(isTemplateLibrary({ templates: [{ documentType: "X", requirements: [1] }] })).toBe(false);
-    expect(isTemplateLibrary(null)).toBe(false);
+    expect(coerceLibrary({ templates: [TPL_AB] })).toBeDefined();
+    expect(coerceLibrary({ templates: [{ documentType: "X", requirements: [1] }] })).toBeUndefined();
+    expect(coerceLibrary(null)).toBeUndefined();
+  });
+
+  it("accepte une exigence citee en clair", () => {
+    const library = coerceLibrary({
+      templates: [{ documentType: "SSA", requirements: ["CS 25.0671(a) amdt. 23"], text: "t" }],
+    });
+    expect(library?.templates[0].requirements[0].id).toBe("CS 25.671(a)");
+    expect(library?.templates[0].requirements[0].qualifier).toBe("Amdt 23");
+  });
+
+  /**
+   * Forme ecrite par une version anterieure, qui ne gardait que les
+   * identifiants. Elle doit etre convertie, sinon tout ce qui lit
+   * `template.requirements` tombe sur undefined.
+   */
+  it("convertit une bibliotheque ecrite au format historique", () => {
+    const library = coerceLibrary({
+      templates: [{ documentType: "SYDMP", requirementIds: ["CS 25.671(a)"], text: "t" }],
+    });
+    expect(library?.templates[0].requirements.map((r) => r.id)).toEqual(["CS 25.671(a)"]);
   });
 });
