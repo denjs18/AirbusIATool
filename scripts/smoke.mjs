@@ -185,6 +185,42 @@ const restants = await carte(/^4\. Pointer les chapitres/)
 console.log("SAISIE :", restants.replace(/\n/g, " "), "| §6.1 dans la trame :", trame.includes("§6.1"));
 await page.screenshot({ path: `${OUT}/02b-pointage.png`, fullPage: true });
 
+// --- Recherche du chapitre dans le document joint -------------------------
+//
+// Le dernier geste manuel : retrouver, dans un document de dizaines de pages,
+// le chapitre que la phrase annonce. L'outil propose, l'ingenieur choisit.
+await page.getByRole("button", { name: /^SSA/ }).click();
+await valider(["CS 25.671(c)(1)", "CS 25.1309(b)"]);
+await page.getByRole("button", { name: "Charger le dossier de securite fictif" }).click();
+await page.getByText("chapitre(s) sur", { exact: false }).waitFor({ timeout: 30000 });
+
+const boutons = carte(/^4\. Pointer les chapitres/).getByRole("button", { name: "chercher" });
+if ((await boutons.count()) === 0) fail("aucun bouton de recherche apres chargement du document");
+
+await boutons.nth(1).click();
+await page.getByText("Chapitres proposes pour le repere", { exact: false }).waitFor();
+const propositions = await page.locator("li[data-candidat]").allInnerTexts();
+console.log(
+  "RECHERCHE :",
+  propositions.map((p) => p.split("\n")[0].slice(0, 60)).join(" // ") || "(aucune)",
+);
+if (!propositions.some((p) => p.startsWith("4.4"))) {
+  fail("le chapitre attendu 4.4 n'est pas propose pour « probabilities are demonstrated »");
+}
+
+await page.locator('li[data-candidat="4.4"]').getByRole("button", { name: "Choisir" }).click();
+await page.waitForTimeout(400);
+const trameSsa = await page.locator("pre").last().innerText();
+console.log("RECHERCHE : chapitre choisi reporte dans la trame :", /§4\.4/.test(trameSsa));
+if (!/§4\.4/.test(trameSsa)) fail("le chapitre choisi n'est pas reporte dans la trame");
+await page.screenshot({ path: `${OUT}/02c-recherche.png`, fullPage: true });
+
+// Retour au cas SYDMP pour la suite du parcours.
+await page.getByRole("button", { name: /^SYDMP/ }).click();
+await valider(["CS 25.671(a) Amdt 23", "JAR 25.1301(a) ch. 11"]);
+await carte(/^4\. Pointer les chapitres/).locator("input[data-repere]").nth(0).fill("6.1");
+await page.waitForTimeout(300);
+
 // Le brouillon doit survivre a un aller-retour vers un autre onglet : pointer
 // un chapitre demande de lire le document joint, donc de quitter l'ecran.
 await page.getByRole("button", { name: /Parametres/ }).click();

@@ -120,3 +120,28 @@ describe("fillPlaceholders", () => {
     expect(countPlaceholders(fillPlaceholders(TEXT, { 0: "6.1", 1: "10" }))).toBe(0);
   });
 });
+
+/**
+ * Un repere place en fin de phrase touche la ponctuation. Le motif ne doit pas
+ * l'absorber : sinon le chapitre saisi remplace le repere et le point, et la
+ * phrase part sans fin dans la coversheet livree.
+ */
+describe("repere en fin de phrase", () => {
+  const TEXTE = "Probabilities are demonstrated in §x.x. In addition, see §x.x[4.2].";
+
+  it("ne mange pas le point qui termine la phrase", () => {
+    expect(splitPlaceholders(TEXTE)[1]).toMatchObject({ marker: "§x.x" });
+    expect(fillPlaceholders(TEXTE, { 0: "4.4" })).toContain("demonstrated in §4.4. In addition");
+  });
+
+  it("laisse la phrase intacte quand rien n'est saisi", () => {
+    expect(fillPlaceholders(TEXTE, {})).toBe(
+      "Probabilities are demonstrated in §x.x. In addition, see §x.x.",
+    );
+  });
+
+  it("compte bien deux reperes", () => {
+    expect(countPlaceholders(TEXTE)).toBe(2);
+    expect(placeholderHints(TEXTE)).toEqual([undefined, "4.2"]);
+  });
+});

@@ -94,6 +94,49 @@ pointer un chapitre demande de lire le document joint, donc de quitter l'écran.
 > chapitre réellement cité. Un repère non saisi ressort en `§x.x` — un trou visible en
 > relecture — jamais en `§5.4`.
 
+### Chercher le chapitre dans le document joint
+
+L'indication dit où c'était. Reste à savoir où c'est **cette fois**. En chargeant le
+document joint (PDF, lu dans le navigateur), l'outil propose pour chaque repère les
+chapitres les plus proches de ce que la phrase annonce.
+
+**La phrase autour du repère est la question.** Rien à saisir : *« The SyDMP references in
+§x.x the other plans describing the activities to be performed »* demande le chapitre qui
+liste les plans. La question est découpée à la proposition, et resserrée sur les mots qui
+entourent le repère quand une même proposition en porte plusieurs — sans quoi deux repères
+d'une même phrase recevraient la même question, donc le même classement.
+
+Chaque candidat affiche **les termes qui l'ont fait remonter** : une suggestion qu'on ne
+peut pas critiquer n'a pas sa place dans une chaîne de certification. Et quand un candidat
+porte le numéro de l'indication de l'édition précédente, c'est signalé — les deux pistes
+convergent, la vérification sera rapide.
+
+Le classement est une **proposition**, jamais un remplissage : l'ingénieur choisit, ou
+ignore.
+
+#### Pourquoi lexical d'abord, et ce qui vient ensuite
+
+Le classement actuel est un BM25 sur titre et corps (`lib/chapter-search.ts`), avec un
+rapprochement morphologique volontairement grossier — pluriel retiré, puis troncature à six
+caractères, faute de quoi `classified` ne rejoint jamais `classification`. Aucun
+téléchargement, aucune dépendance, et **strictement déterministe** : même document, même
+question, même ordre.
+
+Sa limite est connue et [consignée dans les tests](tests/chapter-search.test.ts) : il ne
+rapproche que des mots partagés. Un chapitre qui dit la même chose avec d'autres mots ne
+remonte pas. C'est exactement ce qu'apporterait une recherche sémantique — vecteurs calculés
+localement (`transformers.js`, modèle d'embeddings de ~23 Mo servi depuis `public/`, donc
+sans appel externe), derrière l'interface `ChapterScorer` déjà en place.
+
+Deux raisons d'avoir construit le lexical d'abord plutôt que de commencer par là : il
+permet de juger l'ergonomie du geste avant d'ajouter un modèle, et il reste le repli sur un
+poste verrouillé ou un téléphone. La comparaison mesurée des deux méthodes, sur documents
+réels, vaudra mieux qu'une affirmation.
+
+> À noter : un embedding est **déterministe** — même texte, même vecteur, même classement —
+> et **non génératif** : il ne produit aucun mot. L'outil ne rédigera pas davantage
+> qu'aujourd'hui.
+
 ### Où vivent les rédactions
 
 Elles ne sont **ni dans le dépôt, ni dans l'application**. Elles vivent dans un classeur
@@ -136,7 +179,7 @@ Il se range donc avec elles, dans le référentiel documentaire — pas dans le 
 Trois choix d'architecture, qui répondent aux points de blocage habituels :
 
 **Le moteur est déterministe, pas génératif.** Les contrôles reposent sur de
-l'analyse de texte et des règles explicites, couvertes par 178 tests automatisés. À
+l'analyse de texte et des règles explicites, couvertes par 200 tests automatisés. À
 données identiques, le résultat est identique. L'IA générative n'intervient dans aucune
 vérification ; sa place naturelle est en assistance ponctuelle à la reformulation, en
 périphérie de l'outil et non dans son moteur.
@@ -192,7 +235,7 @@ coversheet (CS 25.703), coversheet hors plan (CS 25.1329), doublon de couverture
 ## Tests
 
 ```bash
-npm test             # 178 tests : logique métier + intégration sur les PDF réels
+npm test             # 200 tests : logique métier + intégration sur les PDF réels
 ```
 
 `tests/integration.test.ts` rejoue la chaîne complète sur les PDF fictifs et vérifie que

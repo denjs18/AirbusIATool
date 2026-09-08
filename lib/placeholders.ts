@@ -24,8 +24,13 @@
  *
  * La partie "[...]" est optionnelle : sans elle, le repere se comporte comme
  * avant, ce qui laisse les redactions deja ecrites valables telles quelles.
+ *
+ * Le repere ne se termine jamais par un point. Sans cette precaution, un repere
+ * place en fin de phrase ("demonstrated in §x.x.") avale la ponctuation : le
+ * chapitre saisi remplacait alors le repere ET le point, et la coversheet
+ * partait avec une phrase sans fin.
  */
-const PLACEHOLDER_SOURCE = String.raw`§\s*[\dxX]*[xX][\dxX.]*(?:\s*\[\s*([^\]\n]{1,80}?)\s*\])?`;
+const PLACEHOLDER_SOURCE = String.raw`§\s*[\dxX]*[xX](?:[\dxX.]*[\dxX])?(?:\s*\[\s*([^\]\n]{1,80}?)\s*\])?`;
 
 /** Motif global. Recree a chaque usage : un motif global garde son lastIndex. */
 export function placeholderPattern(): RegExp {

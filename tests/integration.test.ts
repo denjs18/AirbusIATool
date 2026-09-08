@@ -8,6 +8,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { queryForSlot, rankLexical } from "../lib/chapter-search";
 import { checkCitations, extractChapters, extractCitations } from "../lib/coherence";
 import { crossCheck } from "../lib/crosscheck";
 import { parseHeader } from "../lib/headers";
@@ -223,5 +224,69 @@ describe("blocs types fictifs et ACP fictif", () => {
     for (const template of library!.templates) {
       expect(countPlaceholders(template.text)).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * Recherche du chapitre dans le document joint, sur le PDF fictif reellement
+ * genere.
+ *
+ * C'est cette epreuve, et non les tests unitaires, qui a revele les deux
+ * defauts serieux du premier jet : le point interieur d'un repere "§x.x" pris
+ * pour une fin de phrase, et deux reperes d'une meme proposition recevant la
+ * meme question. Un moteur de recherche ne se juge pas sur des exemples
+ * fabriques pour lui.
+ */
+describe("recherche du chapitre dans le document joint", async () => {
+  const document = await extractPdfTextNode(`${FIXTURES}/DOC-27-SAF-0142_Iss2.pdf`);
+  const chapters = extractChapters(document.pages);
+  const library = coerceLibrary(
+    JSON.parse(readFileSync(`${FIXTURES}/blocs-types.json`, "utf8")),
+  )!;
+
+  /** Redaction SSA a trois reperes, celle qui porte les cas interessants. */
+  const ssa = library.templates.find(
+    (template) =>
+      template.documentType === "SSA" && countPlaceholders(template.text) === 3,
+  )!;
+
+  it("releve la structure en chapitres du document joint", () => {
+    expect(chapters.length).toBeGreaterThan(10);
+    expect(chapters.map((chapter) => chapter.number)).toContain("4.4");
+  });
+
+  it("pose une question differente pour chaque repere d'une meme redaction", () => {
+    const questions = [0, 1, 2].map((index) => queryForSlot(ssa.text!, index));
+    expect(new Set(questions).size).toBe(3);
+    // Le repere ne fait pas partie de la question posee au document.
+    for (const question of questions) expect(question).not.toContain("§");
+  });
+
+  it("propose le chapitre attendu pour une phrase qui parle de classification", () => {
+    const [best] = rankLexical(queryForSlot(ssa.text!, 0), chapters);
+    expect(best.chapter.title).toBe("Classification rationale");
+    expect(best.matched).toContain("classified");
+  });
+
+  it("propose le chapitre attendu pour une phrase qui parle de probabilites", () => {
+    const [best] = rankLexical(queryForSlot(ssa.text!, 1), chapters);
+    expect(best.chapter.number).toBe("4.4");
+  });
+
+  it("explique chaque proposition par des termes de la question", () => {
+    const query = queryForSlot(ssa.text!, 1);
+    for (const candidate of rankLexical(query, chapters)) {
+      expect(candidate.matched.length).toBeGreaterThan(0);
+      for (const term of candidate.matched) {
+        expect(query.toLowerCase()).toContain(term);
+      }
+    }
+  });
+
+  it("rend le meme classement a chaque execution", () => {
+    const query = queryForSlot(ssa.text!, 0);
+    expect(rankLexical(query, chapters).map((c) => c.chapter.number)).toEqual(
+      rankLexical(query, chapters).map((c) => c.chapter.number),
+    );
   });
 });

@@ -16,7 +16,11 @@
  * dans le classeur, ou saisi a l'ecran par le redacteur.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Empty, Metric } from "../ui";
+import { Button, Card, Empty, FileInput, Metric } from "../ui";
+import { suggestForSlot, type ScoredChapter } from "@/lib/chapter-search";
+import { extractChapters } from "@/lib/coherence";
+import { DEMO_FILES, describeLoadError, loadDemoPdf } from "@/lib/demo";
+import { extractPdfText } from "@/lib/pdf";
 import {
   buildCoversheet,
   formatRequirementCitation,
@@ -43,7 +47,7 @@ import {
   type AppliedBlock,
   type TemplateLibrary,
 } from "@/lib/templates";
-import type { ParsedPlan } from "@/lib/types";
+import type { DocumentChapter, ParsedPlan, PdfDocumentText } from "@/lib/types";
 
 /** Identifie un bloc de facon stable, pour rattacher les chapitres saisis. */
 function blockKey(block: AppliedBlock): string {
@@ -56,6 +60,22 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
   /** Le brouillon est relu avant d'etre reenregistre, sinon on l'ecraserait vide. */
   const [restored, setRestored] = useState(false);
   const blocksRef = useRef<HTMLUListElement>(null);
+
+  /**
+   * Document joint charge pour la recherche de chapitres.
+   *
+   * Garde en memoire seulement, jamais dans le stockage du navigateur : c'est
+   * du contenu de document, pas de la saisie. Le rouvrir coute un clic ; le
+   * laisser trainer dans sessionStorage n'apporterait rien et ferait de l'outil
+   * un endroit ou dorment des documents de certification.
+   */
+  const [enclosed, setEnclosed] = useState<PdfDocumentText>();
+  const [chapters, setChapters] = useState<DocumentChapter[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string>();
+  /** Repere dont les candidats sont ouverts, et les candidats correspondants. */
+  const [openSlot, setOpenSlot] = useState<string>();
+  const [candidates, setCandidates] = useState<ScoredChapter[]>([]);
 
   const { documentType, selected, validated, fills } = draft;
 
@@ -159,6 +179,33 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
       plan,
     ],
   );
+
+  /** Charge le document joint et en releve la structure en chapitres. */
+  async function loadEnclosed(source: File | string) {
+    setLoading(true);
+    setLoadError(undefined);
+    setOpenSlot(undefined);
+    try {
+      const document =
+        typeof source === "string" ? await loadDemoPdf(source) : await extractPdfText(source);
+      setEnclosed(document);
+      setChapters(extractChapters(document.pages));
+    } catch (cause) {
+      setLoadError(describeLoadError(cause));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** Propose les chapitres les plus proches de ce que la phrase annonce. */
+  async function search(field: string, text: string, slotIndex: number) {
+    if (openSlot === field) {
+      setOpenSlot(undefined);
+      return;
+    }
+    setOpenSlot(field);
+    setCandidates(await suggestForSlot(text, slotIndex, chapters));
+  }
 
   /** Toute modification de la selection invalide la trame deja produite. */
   const pick = (name: string) =>
@@ -332,11 +379,37 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
               <Field label="Moyens de conformite" mono hint="ex. 3, ou 4 6, ou S"
                      value={draft.moc} onChange={(moc) => patch({ moc })} />
             </div>
+
+            <div className="mt-4">
+              <FileInput
+                label="Charger le document joint (PDF) pour retrouver ses chapitres"
+                accept="application/pdf,.pdf"
+                busy={loading}
+                onFile={(file) => loadEnclosed(file)}
+                demoLabel="Charger le dossier de securite fictif"
+                onDemo={() => loadEnclosed(DEMO_FILES.substantiation)}
+                loaded={
+                  enclosed
+                    ? `${enclosed.sourceName} - ${chapters.length} chapitre(s) sur ${enclosed.pageCount} page(s)`
+                    : undefined
+                }
+              />
+              <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                Facultatif. Le document est lu dans le navigateur et n&apos;est pas conserve : il
+                sert seulement a proposer, pour chaque repere, les chapitres les plus proches de ce
+                que la phrase annonce.
+              </p>
+              {loadError && <p className="mt-2 text-sm text-err-500">{loadError}</p>}
+            </div>
           </Card>
 
           <Card
             title={`4. Pointer les chapitres (${total - remaining}/${total})`}
-            subtitle="Chaque §x.x est un chapitre du document joint a designer. L'indication grisee rappelle ou il se trouvait a l'edition precedente : elle est a verifier, pas a recopier."
+            subtitle={
+              chapters.length
+                ? "Chaque §x.x est un chapitre a designer. L'indication grisee rappelle ou il se trouvait a l'edition precedente ; « chercher » propose les chapitres du document charge. Les deux sont des pistes, pas des reponses."
+                : "Chaque §x.x est un chapitre du document joint a designer. L'indication grisee rappelle ou il se trouvait a l'edition precedente : elle est a verifier, pas a recopier. Chargez le document joint ci-dessus pour que l'outil propose des chapitres."
+            }
             actions={
               remaining > 0 && (
                 <Button variant="secondary" onClick={goToNextGap}>
@@ -351,6 +424,13 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
                 const key = blockKey(block);
                 const count = countPlaceholders(block.justification);
                 const done = Object.entries(values).filter(([, v]) => v.trim()).length;
+                const parts = block.justification ? splitPlaceholders(block.justification) : [];
+                const openIndex = openSlot?.startsWith(`${key}#`)
+                  ? Number(openSlot.slice(key.length + 1))
+                  : undefined;
+                const openHint = parts.find(
+                  (part): part is PlaceholderSlot => part.kind === "slot" && part.index === openIndex,
+                )?.hint;
                 return (
                   <li
                     key={key}
@@ -379,7 +459,7 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
                           className="mt-2 rounded border p-2 font-mono text-[11px] leading-loose whitespace-pre-wrap"
                           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
                         >
-                          {splitPlaceholders(block.justification).map((part, position) =>
+                          {parts.map((part, position) =>
                             part.kind === "text" ? (
                               <span key={position}>{part.text}</span>
                             ) : (
@@ -390,10 +470,34 @@ export default function CoversheetsPanel({ plan }: { plan?: ParsedPlan }) {
                                 onChange={(value) =>
                                   patch({ fills: { ...fills, [`${key}#${part.index}`]: value } })
                                 }
+                                open={openSlot === `${key}#${part.index}`}
+                                onSearch={
+                                  chapters.length
+                                    ? () =>
+                                        search(
+                                          `${key}#${part.index}`,
+                                          block.justification!,
+                                          part.index,
+                                        )
+                                    : undefined
+                                }
                               />
                             ),
                           )}
                         </div>
+
+                        {openIndex !== undefined && (
+                          <Candidates
+                            rank={openIndex + 1}
+                            hint={openHint}
+                            candidates={candidates}
+                            onChoose={(chapter) => {
+                              patch({ fills: { ...fills, [openSlot!]: chapter } });
+                              setOpenSlot(undefined);
+                            }}
+                            onClose={() => setOpenSlot(undefined)}
+                          />
+                        )}
                         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
                           {done}/{count} repere{count > 1 ? "s" : ""} pointe{done > 1 ? "s" : ""}
                           {block.template?.source ? ` · source : ${block.template.source}` : ""}
@@ -472,10 +576,15 @@ function ChapterInput({
   slot,
   value,
   onChange,
+  onSearch,
+  open,
 }: {
   slot: PlaceholderSlot;
   value: string;
   onChange: (value: string) => void;
+  /** Absent tant qu'aucun document joint n'est charge : il n'y a rien a chercher. */
+  onSearch?: () => void;
+  open?: boolean;
 }) {
   const width = Math.max(4, (value || slot.hint || "x.x").length + 2);
   const filled = value.trim().length > 0;
@@ -498,7 +607,99 @@ function ChapterInput({
         }}
         className="mx-0.5 rounded border px-1 py-0 text-center font-mono text-[11px]"
       />
+      {onSearch && (
+        <button
+          type="button"
+          onClick={onSearch}
+          title="Proposer les chapitres du document joint les plus proches de cette phrase"
+          className={`ml-0.5 rounded border px-1 text-[10px] leading-tight ${
+            open ? "bg-brand-500 text-white" : "hover:bg-ink-100 dark:hover:bg-ink-800"
+          }`}
+          style={{ borderColor: open ? "transparent" : "var(--border)" }}
+        >
+          chercher
+        </button>
+      )}
     </span>
+  );
+}
+
+/**
+ * Chapitres proposes pour un repere.
+ *
+ * Chaque candidat affiche les termes qui l'ont fait remonter : une suggestion
+ * qu'on ne peut pas critiquer n'a pas sa place dans une chaine de
+ * certification. Quand un candidat porte le numero de l'indication laissee par
+ * l'edition precedente, c'est signale : les deux pistes convergent, la
+ * verification sera rapide.
+ */
+function Candidates({
+  rank,
+  hint,
+  candidates,
+  onChoose,
+  onClose,
+}: {
+  rank: number;
+  hint?: string;
+  candidates: ScoredChapter[];
+  onChoose: (chapter: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="mt-2 rounded-md border p-2"
+      style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-medium">
+          Chapitres proposes pour le repere {rank}
+          {hint && (
+            <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
+              indication de l&apos;edition precedente : {hint}
+            </span>
+          )}
+        </span>
+        <Button variant="secondary" onClick={onClose}>
+          Fermer
+        </Button>
+      </div>
+
+      {candidates.length === 0 ? (
+        <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+          Aucun chapitre ne partage de terme avec cette phrase. C&apos;est une reponse, pas une
+          panne : le chapitre existe peut-etre sous un autre vocabulaire, et reste a trouver a la
+          lecture.
+        </p>
+      ) : (
+        <ul className="mt-2 flex flex-col gap-1">
+          {candidates.map((candidate) => (
+            <li
+              key={candidate.chapter.number}
+              data-candidat={candidate.chapter.number}
+              className="flex flex-wrap items-center justify-between gap-2 rounded border px-2 py-1"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <span className="text-xs">
+                <span className="font-mono font-semibold">{candidate.chapter.number}</span>{" "}
+                {candidate.chapter.title}{" "}
+                <span style={{ color: "var(--text-muted)" }}>
+                  · p. {candidate.chapter.page} · termes : {candidate.matched.slice(0, 4).join(", ")}
+                </span>
+                {hint === candidate.chapter.number && (
+                  <span className="ml-2 rounded bg-ok-100 px-1.5 text-[10px] font-semibold text-ok-500 uppercase">
+                    = indication
+                  </span>
+                )}
+              </span>
+              <Button variant="secondary" onClick={() => onChoose(candidate.chapter.number)}>
+                Choisir
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
